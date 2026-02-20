@@ -1,0 +1,73 @@
+# =============================================================================
+# Git Configuration
+# =============================================================================
+
+[user]
+	# TODO: fill in your name and email
+	name =
+	email =
+
+[core]
+	# Use input to avoid CRLF issues on WSL / cross-platform
+	autocrlf = input
+	editor = nvim
+	pager = delta
+	excludesfile = ~/.gitignore_global
+
+# -----------------------------------------------------------------------------
+# Delta (diff pager)
+# -----------------------------------------------------------------------------
+[delta]
+	navigate = true
+	side-by-side = true
+	line-numbers = true
+	# "base16" is a clean dark theme that pairs well with Tokyo Night.
+	# For an exact match, install the tokyonight bat theme (see .zshrc) and use:
+	#   syntax-theme = tokyonight_night
+	syntax-theme = base16
+
+[interactive]
+	diffFilter = delta --color-only
+
+# -----------------------------------------------------------------------------
+# Workflow defaults
+# -----------------------------------------------------------------------------
+[pull]
+	rebase = true
+
+[push]
+	autoSetupRemote = true
+
+[init]
+	defaultBranch = main
+
+[merge]
+	conflictStyle = zdiff3
+
+[diff]
+	algorithm = histogram
+
+# -----------------------------------------------------------------------------
+# Aliases
+# -----------------------------------------------------------------------------
+[alias]
+	st = status
+	co = checkout
+	br = branch
+	ci = commit
+	lg = log --oneline --graph --decorate --all
+	last = log -1 HEAD
+	unstage = reset HEAD --
+	undo = reset --soft HEAD~1
+
+# -----------------------------------------------------------------------------
+# Credentials (uncomment and configure as needed)
+# -----------------------------------------------------------------------------
+# [credential "https://gitlab.example.com"]
+# 	helper = store
+
+# -----------------------------------------------------------------------------
+# URL rewriting for airgapped GitLab (uncomment and configure as needed)
+# -----------------------------------------------------------------------------
+# [url "https://gitlab.example.com/"]
+# 	insteadOf = https://gitlab.com/

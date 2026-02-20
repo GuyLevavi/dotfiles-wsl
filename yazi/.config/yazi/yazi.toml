@@ -1,0 +1,33 @@
+# =============================================================================
+# Yazi File Manager Configuration
+# =============================================================================
+
+[manager]
+show_hidden = true
+sort_by = "natural"
+sort_dir_first = true
+
+[preview]
+max_width = 600
+max_height = 900
+
+# Image preview: try sixel first, fall back to chafa
+[plugin.prepend_previewers]
+name = "*"
+mime = "image/*"
+run = "image"
+
+[plugin]
+# Sixel is the preferred image protocol; chafa is the fallback
+# for terminals that don't support sixel.
+previewers = [
+  # Images
+  { name = "*.{jpg,jpeg,png,gif,bmp,svg,webp,ico,tiff}", run = "image" },
+]
+
+[opener]
+# Open text files in nvim
+text = [
+  { run = 'nvim "$@"', desc = "Edit in Neovim", block = true },
+  { run = 'bat "$@"',  desc = "Preview with bat" },
+]

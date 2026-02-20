@@ -1,0 +1,145 @@
+# Starship Prompt Configuration
+# Tailored for Python CV/ML development in airgapped container environments
+# (Kubernetes / OpenShift / RunAI)
+
+# ------------------------------------------------------------------------------
+# Performance
+# ------------------------------------------------------------------------------
+# Cap how long any single module can take (milliseconds).
+# Prevents slow prompts on network mounts or large git repos.
+command_timeout = 500
+
+# Disable scanning parent directories for upward file detection.
+# Faster prompt in deeply nested directories.
+scan_timeout = 30
+
+# ------------------------------------------------------------------------------
+# Prompt layout
+# ------------------------------------------------------------------------------
+format = """
+$hostname$username$directory$git_branch$git_status$python$container$kubernetes$cmd_duration
+$character"""
+
+# Don't add a blank line between prompts
+add_newline = false
+
+# ------------------------------------------------------------------------------
+# Character (input prompt)
+# ------------------------------------------------------------------------------
+[character]
+success_symbol = "[❯](bold green)"
+error_symbol = "[❯](bold red)"
+
+# ------------------------------------------------------------------------------
+# Directory
+# ------------------------------------------------------------------------------
+[directory]
+truncation_length = 3
+truncate_to_repo = true          # use git repo root as base
+style = "bold cyan"
+read_only = " "
+
+# ------------------------------------------------------------------------------
+# Git branch
+# ------------------------------------------------------------------------------
+[git_branch]
+symbol = " "
+style = "bold purple"
+
+# ------------------------------------------------------------------------------
+# Git status — compact ahead/behind/modified/staged counts
+# ------------------------------------------------------------------------------
+# NOTE: This is the most expensive module — it runs `git status` on every prompt.
+# If the prompt feels sluggish in large repos or on /mnt/c, either:
+#   1. Work on the native Linux filesystem (~/Projects instead of /mnt/c/...)
+#   2. Set disabled = true below
+[git_status]
+style = "bold purple"
+format = '([$all_status$ahead_behind]($style) )'
+ahead = "⇡${count}"
+behind = "⇣${count}"
+diverged = "⇕⇡${ahead_count}⇣${behind_count}"
+modified = "!${count}"
+staged = "+${count}"
+untracked = "?${count}"
+deleted = "✘${count}"
+renamed = "»${count}"
+stashed = "≡${count}"
+conflicted = "=${count}"
+# Ignore submodule changes — faster on large repos with vendored submodules
+ignore_submodules = true
+
+# ------------------------------------------------------------------------------
+# Python — version + virtualenv name
+# ------------------------------------------------------------------------------
+[python]
+symbol = " "
+style = "yellow"
+format = '[${symbol}${version}( \($virtualenv\))]($style) '
+detect_extensions = ["py"]
+detect_files = ["requirements.txt", "pyproject.toml", "setup.py", "Pipfile", ".python-version"]
+
+# ------------------------------------------------------------------------------
+# Container (podman / docker)
+# ------------------------------------------------------------------------------
+[container]
+symbol = " "
+style = "red dimmed"
+format = '[$symbol$name]($style) '
+
+# ------------------------------------------------------------------------------
+# Kubernetes — disabled by default
+# Enable when actively working with k8s/OpenShift clusters:
+#   set STARSHIP_KUBERNETES_ACTIVE=1   (or toggle disabled = false below)
+# ------------------------------------------------------------------------------
+[kubernetes]
+symbol = " "
+style = "cyan"
+format = '[$symbol$context( \($namespace\))]($style) '
+disabled = true
+
+# ------------------------------------------------------------------------------
+# Command duration — only show for long-running commands (training, builds, etc.)
+# ------------------------------------------------------------------------------
+[cmd_duration]
+min_time = 2_000                 # 2 seconds
+style = "yellow dimmed"
+format = '[took $duration]($style) '
+
+# ------------------------------------------------------------------------------
+# Hostname — visible inside SSH sessions (RunAI pods, remote nodes)
+# ------------------------------------------------------------------------------
+[hostname]
+ssh_only = true
+style = "bold green"
+format = '[$hostname]($style):'
+
+# ------------------------------------------------------------------------------
+# Username — visible in SSH sessions or when running as root
+# ------------------------------------------------------------------------------
+[username]
+show_always = false              # only in SSH or root
+style_user = "bold yellow"
+style_root = "bold red"
+format = '[$user]($style)@'
+
+# ------------------------------------------------------------------------------
+# Disabled modules — keep the prompt clean for Python CV/ML work
+# ------------------------------------------------------------------------------
+[package]
+disabled = true
+
+[nodejs]
+disabled = true
+
+[rust]
+disabled = true
+
+[golang]
+disabled = true
+
+[java]
+disabled = true
+
+[docker_context]
+disabled = true                  # using podman, not docker

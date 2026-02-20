@@ -1,0 +1,11 @@
+# Airgap cache (large binary downloads — don't track in git)
+airgap/cache/
+airgap/devenv-bundle-*.tar.gz
+
+# Personal specs / brainstorming
+specs.md
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+Desktop.ini
