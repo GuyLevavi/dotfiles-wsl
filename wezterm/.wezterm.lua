@@ -187,13 +187,115 @@ config.keys = {
     mods = "CTRL|SHIFT",
     action = act.ActivateCopyMode,
   },
+
+  -- Shift+Arrow: enter copy mode and start selecting (like Windows Terminal).
+  -- Once in copy mode, continue with Shift+Arrow or vim motions.
+  {
+    key = "LeftArrow",
+    mods = "SHIFT",
+    action = act.Multiple({
+      act.ActivateCopyMode,
+      act.CopyMode({ SetSelectionMode = "Cell" }),
+      act.CopyMode("MoveLeft"),
+    }),
+  },
+  {
+    key = "RightArrow",
+    mods = "SHIFT",
+    action = act.Multiple({
+      act.ActivateCopyMode,
+      act.CopyMode({ SetSelectionMode = "Cell" }),
+      act.CopyMode("MoveRight"),
+    }),
+  },
+  {
+    key = "UpArrow",
+    mods = "SHIFT",
+    action = act.Multiple({
+      act.ActivateCopyMode,
+      act.CopyMode({ SetSelectionMode = "Cell" }),
+      act.CopyMode("MoveUp"),
+    }),
+  },
+  {
+    key = "DownArrow",
+    mods = "SHIFT",
+    action = act.Multiple({
+      act.ActivateCopyMode,
+      act.CopyMode({ SetSelectionMode = "Cell" }),
+      act.CopyMode("MoveDown"),
+    }),
+  },
+}
+
+-- -----------------------------------------------------------------------------
+-- Copy Mode Key Table
+-- -----------------------------------------------------------------------------
+-- Once in copy mode (Ctrl+Shift+X or Shift+Arrow), these keys are active.
+-- Shift+Arrow continues selection, y copies, Escape exits.
+config.key_tables = {
+  copy_mode = {
+    -- Shift+Arrow: extend selection
+    { key = "LeftArrow", mods = "SHIFT", action = act.CopyMode("MoveLeft") },
+    { key = "RightArrow", mods = "SHIFT", action = act.CopyMode("MoveRight") },
+    { key = "UpArrow", mods = "SHIFT", action = act.CopyMode("MoveUp") },
+    { key = "DownArrow", mods = "SHIFT", action = act.CopyMode("MoveDown") },
+
+    -- Ctrl+Shift+Arrow: extend selection by word
+    { key = "LeftArrow", mods = "CTRL|SHIFT", action = act.CopyMode("MoveBackwardWord") },
+    { key = "RightArrow", mods = "CTRL|SHIFT", action = act.CopyMode("MoveForwardWord") },
+
+    -- Arrow keys without shift: move cursor (adjusts selection end)
+    { key = "LeftArrow", mods = "NONE", action = act.CopyMode("MoveLeft") },
+    { key = "RightArrow", mods = "NONE", action = act.CopyMode("MoveRight") },
+    { key = "UpArrow", mods = "NONE", action = act.CopyMode("MoveUp") },
+    { key = "DownArrow", mods = "NONE", action = act.CopyMode("MoveDown") },
+
+    -- Vim-style movement
+    { key = "h", mods = "NONE", action = act.CopyMode("MoveLeft") },
+    { key = "j", mods = "NONE", action = act.CopyMode("MoveDown") },
+    { key = "k", mods = "NONE", action = act.CopyMode("MoveUp") },
+    { key = "l", mods = "NONE", action = act.CopyMode("MoveRight") },
+    { key = "w", mods = "NONE", action = act.CopyMode("MoveForwardWord") },
+    { key = "b", mods = "NONE", action = act.CopyMode("MoveBackwardWord") },
+    { key = "e", mods = "NONE", action = act.CopyMode("MoveForwardWordEnd") },
+    { key = "0", mods = "NONE", action = act.CopyMode("MoveToStartOfLine") },
+    { key = "$", mods = "NONE", action = act.CopyMode("MoveToEndOfLineContent") },
+    { key = "g", mods = "NONE", action = act.CopyMode("MoveToScrollbackTop") },
+    { key = "G", mods = "SHIFT", action = act.CopyMode("MoveToScrollbackBottom") },
+
+    -- Selection modes
+    { key = "v", mods = "NONE", action = act.CopyMode({ SetSelectionMode = "Cell" }) },
+    { key = "V", mods = "SHIFT", action = act.CopyMode({ SetSelectionMode = "Line" }) },
+    { key = "v", mods = "CTRL", action = act.CopyMode({ SetSelectionMode = "Block" }) },
+
+    -- Copy and exit
+    {
+      key = "y",
+      mods = "NONE",
+      action = act.Multiple({
+        act.CopyTo("ClipboardAndPrimarySelection"),
+        act.CopyMode("Close"),
+      }),
+    },
+    { key = "Enter", mods = "NONE", action = act.Multiple({
+      act.CopyTo("ClipboardAndPrimarySelection"),
+      act.CopyMode("Close"),
+    })},
+
+    -- Exit copy mode
+    { key = "Escape", mods = "NONE", action = act.CopyMode("Close") },
+    { key = "q", mods = "NONE", action = act.CopyMode("Close") },
+
+    -- Scrolling
+    { key = "u", mods = "CTRL", action = act.CopyMode("PageUp") },
+    { key = "d", mods = "CTRL", action = act.CopyMode("PageDown") },
+  },
 }
 
 -- -----------------------------------------------------------------------------
 -- Mouse Bindings
 -- -----------------------------------------------------------------------------
--- Default mouse bindings are sane; scroll in alternate screen is handled by
--- bypass_mouse_reporting_modifiers above. No overrides needed.
 config.mouse_bindings = {
   -- Right-click paste (common Windows expectation)
   {
