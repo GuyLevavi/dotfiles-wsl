@@ -88,15 +88,18 @@ any program reads `~/.zshrc`, it transparently reads the real file inside
 your dotfiles folder.
 
 **Key differences from Windows shortcuts:**
+
 - A `.lnk` shortcut only works in Windows Explorer
 - A symlink is transparent to *all* programs — `cat`, `vim`, Python, everything
 - Delete the symlink → original file is safe
 - Delete the original → symlink becomes "broken" (dangling)
 
 You can see symlinks with `ls -la`:
+
 ```
 lrwxrwxrwx  1 gl gl  75 Feb 20 19:54 .zshrc -> ../../dotfiles/zsh/.zshrc
 ```
+
 The `l` at the start and the `->` arrow show it's a symlink.
 
 ### What Is PATH?
@@ -118,6 +121,7 @@ require admin privileges.
 ### What Is XDG?
 
 The XDG Base Directory Specification is a Linux standard that says:
+
 - Config files go in `~/.config/`
 - Data files go in `~/.local/share/`
 - Cache files go in `~/.cache/`
@@ -157,6 +161,7 @@ Here's how all the tools relate to each other:
 ```
 
 **Layer by layer:**
+
 1. **WezTerm** is the window you see on your screen (runs on Windows)
 2. It connects into **WSL2 Fedora** (a Linux environment inside Windows)
 3. **Zsh** is the shell that interprets your commands
@@ -171,6 +176,7 @@ Here's how all the tools relate to each other:
 **Config:** `~/.wezterm.lua` (on your Windows home directory)
 
 ### Why WezTerm?
+
 - Fast GPU rendering (text scrolls smoothly even with huge output)
 - Native WSL2 integration (connects directly to your Linux distros)
 - Lua configuration (a real programming language, not just key=value)
@@ -194,6 +200,7 @@ Here's how all the tools relate to each other:
 | Right-click | Paste from clipboard |
 
 ### Tips
+
 - WezTerm reloads its config automatically when you save the file
 - If it crashes on launch, try changing `WebGpu` to `OpenGL` in the config
 - The `window_background_opacity = 0.95` gives a subtle transparency effect
@@ -206,6 +213,7 @@ Here's how all the tools relate to each other:
 **Config:** `~/.zshrc`
 
 ### Why Zsh over Bash?
+
 - Much better tab completion (with menus and fuzzy matching)
 - Plugin ecosystem (thousands of plugins via zinit/oh-my-zsh)
 - Better globbing (e.g., `**/*.py` to find all Python files recursively)
@@ -273,6 +281,7 @@ cat file.txt | grep "error" | wc -l
 **Location:** `~/.local/share/zinit/`
 
 ### What It Does
+
 Zinit downloads, manages, and loads shell plugins from GitHub. Plugins add
 features like syntax highlighting, autosuggestions, and better completions
 to your shell.
@@ -294,6 +303,7 @@ to your shell.
 3. **zsh-completions** — Extra tab-completion definitions for hundreds of tools
 
 ### Turbo Mode
+
 Your config uses `wait lucid` — this means plugins load *after* the prompt
 appears. Your shell starts instantly, and plugins kick in within
 milliseconds. You won't notice the delay.
@@ -315,6 +325,7 @@ zinit loaded               # List loaded plugins
 **Config:** `~/.config/starship.toml`
 
 ### What It Does
+
 The prompt is the text that appears before your cursor. Instead of a plain
 `$`, Starship shows useful context:
 
@@ -324,6 +335,7 @@ The prompt is the text that appears before your cursor. Instead of a plain
 ```
 
 This tells you at a glance:
+
 - Current directory: `~/Projects/my-ml-project`
 - Git branch: `main`
 - Git status: 1 staged change, 2 untracked files
@@ -331,13 +343,16 @@ This tells you at a glance:
 - Last command took 3 seconds
 
 ### Intelligence
+
 Starship is context-aware — it only shows modules that are relevant:
+
 - Python version only appears in directories with `.py` files or `pyproject.toml`
 - Git info only appears inside Git repos
 - Docker context only appears when Docker/Podman is configured
 - Command duration only shows for commands > 2 seconds
 
 ### Customization
+
 Edit `~/.config/starship.toml` to change what appears in your prompt.
 Common tweaks:
 
@@ -364,6 +379,7 @@ with persistent sessions that survive disconnects.
 **Config:** `~/.config/tmux/tmux.conf`
 
 ### Why tmux?
+
 1. **Split your screen** into multiple panes (editor + shell + logs)
 2. **Sessions persist** — detach, close WezTerm, come back later, reattach
 3. **Remote safety** — if your SSH connection drops, your work continues
@@ -480,6 +496,7 @@ pre-configured setup that turns it into a full IDE.
 **Config:** `~/.config/nvim/`
 
 ### Why Neovim?
+
 - Runs in the terminal (works over SSH, in tmux, everywhere)
 - Extremely fast, even on huge files
 - Fully customizable with Lua
@@ -556,6 +573,7 @@ Vim commands compose like a language. A **verb** (action) + a **motion**
 | `i{` | "Inner braces" (content between {}) |
 
 **Combine them:**
+
 - `dw` = delete to next word
 - `d$` = delete to end of line
 - `ciw` = change inner word (delete word, start typing)
@@ -627,7 +645,9 @@ popup (which-key) shows you all available commands.
 | `Ctrl+h/j/k/l` | Navigate between windows |
 
 ### First Launch
+
 The first time you open `nvim`, LazyVim will automatically:
+
 1. Install the Lazy.nvim plugin manager
 2. Download and install all configured plugins
 3. Install treesitter parsers (for syntax highlighting)
@@ -638,13 +658,16 @@ This takes 1-2 minutes with a good internet connection. Subsequent launches
 are instant.
 
 ### Python-Specific Features
+
 Your config includes:
+
 - **Pyright** — type checking and autocomplete for Python
 - **Ruff** — ultra-fast linting and formatting (replaces flake8, black, isort)
 - **debugpy** — interactive Python debugging with breakpoints
 - **iron.nvim** — REPL integration (send code to a Python interpreter, Jupyter-like)
 
 To use the REPL:
+
 1. Open a Python file
 2. `Space r s` — Start REPL (opens a Python interpreter in a split)
 3. Select code in Visual mode, then `Space r s` — Send selection to REPL
@@ -663,6 +686,7 @@ Instead of memorizing Git commands, you navigate panels with your keyboard.
 Think of it as GitHub Desktop, but in your terminal.
 
 **Layout:**
+
 ```
 ┌──────────┬──────────────────────────────┐
 │ Status   │                              │
@@ -700,6 +724,7 @@ operations, including commits, rebases, and merges.
 **Config:** Already set up in your `~/.gitconfig`
 
 Delta automatically enhances the output of:
+
 - `git diff` — see changes with syntax highlighting
 - `git log -p` — see commit diffs beautifully
 - `git show` — see a specific commit
@@ -709,6 +734,7 @@ You don't need to do anything special — it works automatically with all
 git commands.
 
 **Navigation while viewing diffs:**
+
 - `n` / `N` — jump between diff sections
 - `q` — quit
 - `/pattern` — search
@@ -854,6 +880,7 @@ Think of it as Windows Explorer, but keyboard-driven and much faster.
 | `A` | Create new directory |
 
 **Features:**
+
 - Image preview in WezTerm
 - Syntax-highlighted code preview
 - Multi-tab (`t` to open new tab)
@@ -885,6 +912,7 @@ bat -l json file.txt    # Force a specific syntax language
 ```
 
 bat automatically:
+
 - Detects the file language and applies syntax highlighting
 - Shows line numbers
 - Shows Git change markers in the gutter
@@ -947,6 +975,7 @@ rg -F 'literal string'  # Fixed string (no regex interpretation)
 ```
 
 **Filtering levels:**
+
 ```bash
 rg pattern              # Default: respects .gitignore, skips hidden files
 rg -u pattern           # Also search gitignored files
@@ -955,6 +984,7 @@ rg -uuu pattern         # Also search binary files (everything)
 ```
 
 **Common workflows:**
+
 ```bash
 # Find all TODO comments in Python files
 rg TODO -t python
@@ -1039,6 +1069,7 @@ uv pip compile requirements.in -o requirements.txt
 ```
 
 **Your aliases:**
+
 ```bash
 pip     → uv pip          # Faster pip
 venv    → uv venv         # Create virtualenv
@@ -1066,6 +1097,7 @@ marimo tutorial intro
 ```
 
 **Why marimo over Jupyter?**
+
 - **No hidden state** — in Jupyter, you can run cells out of order and get
   stale variables. Marimo prevents this by design.
 - **Reactive** — change one cell, dependent cells auto-update
@@ -1092,6 +1124,7 @@ pd rm <container>      # Remove a container
 ```
 
 **Your aliases:**
+
 ```bash
 pd    → podman
 pdr   → podman run
@@ -1100,6 +1133,7 @@ pdc   → podman ps
 ```
 
 **Why Podman over Docker?**
+
 - No daemon (background service) needed
 - Rootless by default (more secure)
 - Same OCI images (pulls from Docker Hub, etc.)
@@ -1115,6 +1149,7 @@ while appearing in the right places for each program.
 ### How Your Setup Works
 
 Your dotfiles live in:
+
 ```
 ~/Documents/Projects/terminal_10x_engineer/
 ├── zsh/.zshrc                          # Real file
@@ -1125,6 +1160,7 @@ Your dotfiles live in:
 ```
 
 Stow creates symlinks so programs find them:
+
 ```
 ~/.zshrc → .../terminal_10x_engineer/zsh/.zshrc
 ~/.gitconfig → .../terminal_10x_engineer/git/.gitconfig
@@ -1154,6 +1190,7 @@ stow zsh starship nvim tmux yazi git podman
 ```
 
 ### Why This Matters
+
 - All your config is version-controlled (you can `git commit` changes)
 - Setting up a new machine = clone repo + run stow
 - You can experiment: `stow -D nvim` removes your Neovim config, try something
@@ -1167,6 +1204,7 @@ stow zsh starship nvim tmux yazi git podman
 **Variant:** Night (the darkest variant)
 
 Tokyo Night is applied to:
+
 - WezTerm (terminal colors)
 - Neovim (editor theme via tokyonight.nvim)
 - tmux (status bar)
@@ -1191,6 +1229,7 @@ These are defined in your `~/.zshrc`. Type the alias instead of the full
 command:
 
 ### Navigation
+
 | Alias | Expands To | What It Does |
 |---|---|---|
 | `..` | `cd ..` | Go up one directory |
@@ -1203,12 +1242,14 @@ command:
 | `z` | zoxide | Smart directory jump |
 
 ### Files
+
 | Alias | Expands To | What It Does |
 |---|---|---|
 | `cat` | `bat --paging=never` | View file with syntax highlighting |
 | `catp` | `bat` | View file with paging |
 
 ### Git
+
 | Alias | Expands To | What It Does |
 |---|---|---|
 | `g` | `git` | Git shortcut |
@@ -1221,6 +1262,7 @@ command:
 | `lg` | `lazygit` | Visual git TUI |
 
 ### Python
+
 | Alias | Expands To | What It Does |
 |---|---|---|
 | `py` | `python3` | Python shortcut |
@@ -1229,6 +1271,7 @@ command:
 | `uvr` | `uv run` | Run in project venv |
 
 ### Editor
+
 | Alias | Expands To | What It Does |
 |---|---|---|
 | `v` | `nvim` | Open Neovim |
@@ -1236,6 +1279,7 @@ command:
 | `vim` | `nvim` | Open Neovim |
 
 ### Containers
+
 | Alias | Expands To | What It Does |
 |---|---|---|
 | `pd` | `podman` | Podman shortcut |
@@ -1355,20 +1399,26 @@ pd run -p 8080:8080 my-ml-app
 ## 18. Troubleshooting
 
 ### "command not found"
+
 Your tools are in `~/.local/bin`. Make sure it's in your PATH:
+
 ```bash
 echo $PATH | tr ':' '\n' | head -5
 ```
+
 If `~/.local/bin` is not listed, check your `~/.zprofile`.
 
 ### WezTerm won't open
+
 1. Check the domain name matches: open PowerShell, run `wsl -l`, and ensure
    the name in `.wezterm.lua` matches exactly (e.g., `WSL:FedoraLinux-43`)
 2. Try changing `WebGpu` to `OpenGL` in `.wezterm.lua`
 3. Check `C:\Users\guyle\.wezterm.lua` exists (not just in the dotfiles repo)
 
 ### Neovim plugins not working
+
 On first launch, wait for all plugins to install. If something fails:
+
 ```bash
 # Inside Neovim:
 :Lazy           # Open plugin manager
@@ -1378,18 +1428,23 @@ On first launch, wait for all plugins to install. If something fails:
 ```
 
 ### Fonts look wrong (squares/boxes instead of icons)
+
 Install JetBrains Mono Nerd Font on Windows. The Nerd Font version includes
 icons. Regular JetBrains Mono does not have the icons.
 
 ### tmux colors look wrong
+
 Make sure your `TERM` is set correctly:
+
 ```bash
 echo $TERM
 # Should be: tmux-256color (inside tmux) or xterm-256color (outside)
 ```
 
 ### Shell starts slowly
+
 Zinit turbo mode loads plugins after the prompt. If it's still slow:
+
 ```bash
 # Time your shell startup
 time zsh -i -c exit
@@ -1398,10 +1453,13 @@ time zsh -i -c exit
 ```
 
 ### WSL is slow on /mnt/c/ files
+
 The Windows filesystem (`/mnt/c/`) is slow from WSL. For performance-critical
 work (Python projects, Git repos), copy files to the Linux filesystem:
+
 ```bash
 cp -r /mnt/c/Users/guyle/Projects/my-project ~/Projects/
 cd ~/Projects/my-project
 ```
+
 This can be 10-50x faster for file-heavy operations.
