@@ -77,6 +77,7 @@ clone_shallow "https://github.com/zdharma-continuum/zinit.git" zinit.tar.gz
 clone_shallow "https://github.com/zdharma-continuum/fast-syntax-highlighting.git" fast-syntax-highlighting.tar.gz
 clone_shallow "https://github.com/zsh-users/zsh-autosuggestions.git" zsh-autosuggestions.tar.gz
 clone_shallow "https://github.com/zsh-users/zsh-completions.git" zsh-completions.tar.gz
+clone_shallow "https://github.com/Aloxaf/fzf-tab.git" fzf-tab.tar.gz
 
 # ===== Neovim plugins (manual step) =====
 echo ""

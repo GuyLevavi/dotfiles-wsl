@@ -109,7 +109,13 @@ fi
 # ===== Step 2: System packages =====
 log "Step 2/5: System packages"
 if [[ "$(id -u)" -eq 0 && -f "$REPO_ROOT/bootstrap/02-install-packages.sh" ]]; then
-    bash "$REPO_ROOT/bootstrap/02-install-packages.sh" --minimal 2>&1 || warn "DNF failed (expected without local repo)"
+    # Skip DNF in airgap environments — it hangs when network is blocked.
+    # Packages should already be on the base image.
+    if curl -s --max-time 3 https://fedoraproject.org >/dev/null 2>&1; then
+        bash "$REPO_ROOT/bootstrap/02-install-packages.sh" --minimal 2>&1 || warn "DNF failed"
+    else
+        warn "Network unavailable — skipping DNF (packages must already be on the base image)"
+    fi
 else
     warn "Skipping DNF (not root or script missing)"
 fi
@@ -169,20 +175,35 @@ if [[ -f "$zinit_tar" && ( ! -d "$zinit_home" || "$FORCE" == true ) ]]; then
 fi
 
 # Install zsh plugins from cache
+# Zinit expects plugin dirs named "owner---repo" (e.g. zdharma-continuum---fast-syntax-highlighting).
+# The bundle tarballs are named after the repo only, so we map them here.
 plugins_dir="$USER_HOME/.local/share/zinit/plugins"
 run_as_user mkdir -p "$plugins_dir"
-for plugin_tar in "$CACHE"/fast-syntax-highlighting.tar.gz "$CACHE"/zsh-autosuggestions.tar.gz "$CACHE"/zsh-completions.tar.gz; do
+
+declare -A plugin_map=(
+    ["fast-syntax-highlighting"]="zdharma-continuum---fast-syntax-highlighting"
+    ["zsh-autosuggestions"]="zsh-users---zsh-autosuggestions"
+    ["zsh-completions"]="zsh-users---zsh-completions"
+    ["fzf-tab"]="Aloxaf---fzf-tab"
+)
+
+for plugin_tar in "$CACHE"/fast-syntax-highlighting.tar.gz "$CACHE"/zsh-autosuggestions.tar.gz "$CACHE"/zsh-completions.tar.gz "$CACHE"/fzf-tab.tar.gz; do
     [[ -f "$plugin_tar" ]] || continue
     name="$(basename "$plugin_tar" .tar.gz)"
-    target="$plugins_dir/$name"
+    zinit_name="${plugin_map[$name]:-$name}"
+    target="$plugins_dir/$zinit_name"
     if [[ ! -d "$target" || "$FORCE" == true ]]; then
         rm -rf "$target"
         tmp="$(mktemp -d)"; chmod 755 "$tmp"; tar -xzf "$plugin_tar" -C "$tmp"
         chmod -R a+rX "$tmp"
-        [[ -d "$tmp/repo" ]] && run_as_user cp -a "$tmp/repo" "$target" \
-            || { run_as_user mkdir -p "$target"; run_as_user cp -a "$tmp"/* "$target/"; }
+        if [[ -d "$tmp/repo" ]]; then
+            run_as_user cp -a "$tmp/repo" "$target"
+        else
+            run_as_user mkdir -p "$target"
+            run_as_user cp -a "$tmp"/* "$target/"
+        fi
         rm -rf "$tmp"
-        ok "Plugin: $name"
+        ok "Plugin: $zinit_name"
     fi
 done
 

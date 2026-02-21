@@ -30,13 +30,14 @@ function Write-Ok   { param($msg) Write-Host "  + $msg" -ForegroundColor Green }
 function Write-Warn { param($msg) Write-Host "  ! $msg" -ForegroundColor Yellow }
 function Write-Fail { param($msg) Write-Host "  X $msg" -ForegroundColor Red }
 
-# Write a script into the test WSL distro without BOM (PowerShell pipe adds BOM)
+# Write a script into the test WSL distro without BOM and with Unix line endings
 function Write-WslScript {
     param([string]$Path, [string]$Content)
-    # Write to a temp file on Windows, then copy via /mnt/c
+    # Write to a temp file on Windows with LF line endings (no CRLF, no BOM)
     $tmpFile = [System.IO.Path]::GetTempFileName()
     $utf8NoBom = New-Object System.Text.UTF8Encoding $false
-    [System.IO.File]::WriteAllText($tmpFile, $Content, $utf8NoBom)
+    $unixContent = $Content -replace "`r`n", "`n"
+    [System.IO.File]::WriteAllText($tmpFile, $unixContent, $utf8NoBom)
     $wslTmp = $tmpFile -replace '\\','/' -replace 'C:','/mnt/c'
     wsl -d $TestDistro -u root -- sh -c "cp '$wslTmp' '$Path' && chmod +x '$Path'"
     Remove-Item $tmpFile -Force
@@ -132,7 +133,8 @@ Write-Ok "Test distro reset to clean state"
 # ── Step 4: Simulate airgap (block network inside WSL) ──────────────────────
 Write-Step "Blocking network inside test distro (simulating airgap)..."
 
-# Drop all outbound traffic except loopback using nftables (Fedora 43 default)
+# Drop all outbound traffic except loopback using nftables (Fedora 43 default).
+# Persist via nftables.service so rules survive WSL restarts.
 $firewallScript = @"
 set -e
 nft flush ruleset
@@ -140,12 +142,16 @@ nft add table inet filter
 nft add chain inet filter output '{ type filter hook output priority 0; policy drop; }'
 nft add rule inet filter output oifname lo accept
 
+# Persist: save rules and enable nftables service to reload on boot
+nft list ruleset > /etc/sysconfig/nftables.conf
+systemctl enable nftables.service 2>/dev/null || true
+
 # Verify: this curl SHOULD fail
 if curl -s --max-time 3 https://github.com >/dev/null 2>&1; then
     echo 'ERROR: Network still reachable!'
     exit 1
 else
-    echo 'Network blocked — airgap simulation active'
+    echo 'Network blocked — airgap simulation active (persistent)'
 fi
 "@
 Write-WslScript -Path "/tmp/block-network.sh" -Content $firewallScript
@@ -258,6 +264,13 @@ check "yazi.toml"     "test -f ~/.config/yazi/yazi.toml"
 check "gitconfig"     "test -L ~/.gitconfig"
 check "registries"    "test -f ~/.config/containers/registries.conf"
 check "zinit"         "test -d ~/.local/share/zinit/zinit.git"
+
+echo ""
+echo "Plugin verification (zinit offline cache):"
+check "fast-syntax-highlighting" "test -d ~/.local/share/zinit/plugins/zdharma-continuum---fast-syntax-highlighting"
+check "zsh-autosuggestions"      "test -d ~/.local/share/zinit/plugins/zsh-users---zsh-autosuggestions"
+check "zsh-completions"          "test -d ~/.local/share/zinit/plugins/zsh-users---zsh-completions"
+check "fzf-tab"                  "test -d ~/.local/share/zinit/plugins/Aloxaf---fzf-tab"
 
 echo ""
 echo "Results: $passed/$total passed, $failed failed"
