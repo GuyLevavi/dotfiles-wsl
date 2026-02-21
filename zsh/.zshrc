@@ -235,3 +235,6 @@ alias hm="helm"
 # -----------------------------------------------------------------------------
 export PYTHONDONTWRITEBYTECODE=1   # don't litter .pyc files
 export UV_LINK_MODE=copy           # better compatibility inside containers
+
+# AI coding tools
+export PATH="$HOME/.opencode/bin:$HOME/.npm-global/bin:$PATH"
