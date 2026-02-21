@@ -187,65 +187,16 @@ config.keys = {
     mods = "CTRL|SHIFT",
     action = act.ActivateCopyMode,
   },
-
-  -- Shift+Arrow: enter copy mode and start selecting (like Windows Terminal).
-  -- Once in copy mode, continue with Shift+Arrow or vim motions.
-  {
-    key = "LeftArrow",
-    mods = "SHIFT",
-    action = act.Multiple({
-      act.ActivateCopyMode,
-      act.CopyMode({ SetSelectionMode = "Cell" }),
-      act.CopyMode("MoveLeft"),
-    }),
-  },
-  {
-    key = "RightArrow",
-    mods = "SHIFT",
-    action = act.Multiple({
-      act.ActivateCopyMode,
-      act.CopyMode({ SetSelectionMode = "Cell" }),
-      act.CopyMode("MoveRight"),
-    }),
-  },
-  {
-    key = "UpArrow",
-    mods = "SHIFT",
-    action = act.Multiple({
-      act.ActivateCopyMode,
-      act.CopyMode({ SetSelectionMode = "Cell" }),
-      act.CopyMode("MoveUp"),
-    }),
-  },
-  {
-    key = "DownArrow",
-    mods = "SHIFT",
-    action = act.Multiple({
-      act.ActivateCopyMode,
-      act.CopyMode({ SetSelectionMode = "Cell" }),
-      act.CopyMode("MoveDown"),
-    }),
-  },
 }
 
 -- -----------------------------------------------------------------------------
 -- Copy Mode Key Table
 -- -----------------------------------------------------------------------------
--- Once in copy mode (Ctrl+Shift+X or Shift+Arrow), these keys are active.
--- Shift+Arrow continues selection, y copies, Escape exits.
+-- Enter copy mode with Ctrl+Shift+X. These keys are active inside copy mode.
+-- Vim motions to navigate, v/V to select, y to copy, Escape to exit.
 config.key_tables = {
   copy_mode = {
-    -- Shift+Arrow: extend selection
-    { key = "LeftArrow", mods = "SHIFT", action = act.CopyMode("MoveLeft") },
-    { key = "RightArrow", mods = "SHIFT", action = act.CopyMode("MoveRight") },
-    { key = "UpArrow", mods = "SHIFT", action = act.CopyMode("MoveUp") },
-    { key = "DownArrow", mods = "SHIFT", action = act.CopyMode("MoveDown") },
-
-    -- Ctrl+Shift+Arrow: extend selection by word
-    { key = "LeftArrow", mods = "CTRL|SHIFT", action = act.CopyMode("MoveBackwardWord") },
-    { key = "RightArrow", mods = "CTRL|SHIFT", action = act.CopyMode("MoveForwardWord") },
-
-    -- Arrow keys without shift: move cursor (adjusts selection end)
+    -- Arrow keys: move cursor
     { key = "LeftArrow", mods = "NONE", action = act.CopyMode("MoveLeft") },
     { key = "RightArrow", mods = "NONE", action = act.CopyMode("MoveRight") },
     { key = "UpArrow", mods = "NONE", action = act.CopyMode("MoveUp") },
@@ -278,10 +229,14 @@ config.key_tables = {
         act.CopyMode("Close"),
       }),
     },
-    { key = "Enter", mods = "NONE", action = act.Multiple({
-      act.CopyTo("ClipboardAndPrimarySelection"),
-      act.CopyMode("Close"),
-    })},
+    {
+      key = "Enter",
+      mods = "NONE",
+      action = act.Multiple({
+        act.CopyTo("ClipboardAndPrimarySelection"),
+        act.CopyMode("Close"),
+      }),
+    },
 
     -- Exit copy mode
     { key = "Escape", mods = "NONE", action = act.CopyMode("Close") },

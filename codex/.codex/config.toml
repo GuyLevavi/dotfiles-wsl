@@ -1,0 +1,17 @@
+# Codex CLI configuration
+# Docs: https://github.com/openai/codex
+#
+# NOTE: Codex CLI does NOT support GitHub Copilot.
+# You need an OpenAI API key or ChatGPT Plus/Pro subscription.
+#
+# Option 1 - API key: set OPENAI_API_KEY in your environment
+#   export OPENAI_API_KEY="sk-..."
+#
+# Option 2 - ChatGPT login: run `codex --login` to authenticate
+#   via your ChatGPT subscription (opens browser).
+
+# Model to use (default: o4-mini)
+model = "o4-mini"
+
+# Approval policy: "suggest" (default), "auto-edit", or "full-auto"
+approval_policy = "suggest"

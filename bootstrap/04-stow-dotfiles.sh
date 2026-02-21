@@ -5,7 +5,7 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKUP="$HOME/.dotfiles-backup"
-PACKAGES=(zsh starship nvim tmux yazi git podman)
+PACKAGES=(zsh starship nvim tmux yazi git podman opencode codex)
 
 backup_conflicts() {
     local pkg="$1"

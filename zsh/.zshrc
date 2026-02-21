@@ -158,6 +158,24 @@ if command -v fzf &>/dev/null; then
         --color=marker:#9ece6a,fg+:#c0caf5,prompt:#7dcfff,hl+:#7aa2f7 \
         --color=selected-bg:#364a82 \
         --border --layout=reverse --height=40%"
+
+    # Fix Ctrl+R history: the built-in widget sometimes pastes the line number
+    # and tab before the command. This override strips the number prefix and
+    # sets LBUFFER directly instead of relying on vi-fetch-history.
+    fzf-history-widget() {
+        local selected
+        setopt localoptions noglobsubst noposixbuiltins pipefail no_aliases noglob 2>/dev/null
+        selected="$(fc -rl 1 | awk '{ cmd=$0; sub(/^[ \t]*[0-9]+\**[ \t]+/, "", cmd); if (!seen[cmd]++) print cmd }' |
+            FZF_DEFAULT_OPTS="--height ${FZF_TMUX_HEIGHT:-40%} --bind=ctrl-z:ignore ${FZF_DEFAULT_OPTS-} --scheme=history --bind=ctrl-r:toggle-sort --wrap-sign '\t↳ ' --highlight-line ${FZF_CTRL_R_OPTS-} --query=${(qqq)LBUFFER} +m" \
+            FZF_DEFAULT_OPTS_FILE='' fzf)"
+        local ret=$?
+        if [[ -n "$selected" ]]; then
+            LBUFFER="$selected"
+        fi
+        zle reset-prompt
+        return $ret
+    }
+    zle -N fzf-history-widget
 fi
 
 # bat theme
@@ -235,3 +253,6 @@ alias hm="helm"
 # -----------------------------------------------------------------------------
 export PYTHONDONTWRITEBYTECODE=1   # don't litter .pyc files
 export UV_LINK_MODE=copy           # better compatibility inside containers
+
+# AI coding tools
+export PATH="$HOME/.opencode/bin:$HOME/.npm-global/bin:$PATH"

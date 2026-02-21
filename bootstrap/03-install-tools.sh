@@ -230,6 +230,28 @@ else
     fi
 fi
 
+# OpenCode — AI coding agent (supports GitHub Copilot, Anthropic, OpenAI, etc.)
+echo "==> opencode (latest)"
+if $OFFLINE; then
+    [[ -f "${CACHE}/opencode" ]] && install -m 0755 "${CACHE}/opencode" "${HOME}/.opencode/bin/opencode" || \
+        echo "   Skipped (no offline binary found)"
+else
+    curl -fsSL https://opencode.ai/install | bash
+fi
+
+# Codex CLI — OpenAI coding agent (requires OpenAI API key or ChatGPT login)
+echo "==> codex (latest via npm)"
+if $OFFLINE; then
+    echo "   Skipped (requires npm online install)"
+else
+    if command -v npm &>/dev/null; then
+        npm config set prefix "${HOME}/.npm-global" 2>/dev/null || true
+        npm install -g @openai/codex
+    else
+        echo "   Skipped (npm not found — install Node.js first)"
+    fi
+fi
+
 # ===== Summary =====
 echo ""
 echo "All tools installed to ${BIN}"
