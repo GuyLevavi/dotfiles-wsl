@@ -30,10 +30,24 @@ function Write-Ok   { param($msg) Write-Host "  + $msg" -ForegroundColor Green }
 function Write-Warn { param($msg) Write-Host "  ! $msg" -ForegroundColor Yellow }
 function Write-Fail { param($msg) Write-Host "  X $msg" -ForegroundColor Red }
 
+# Write a script into the test WSL distro without BOM (PowerShell pipe adds BOM)
+function Write-WslScript {
+    param([string]$Path, [string]$Content)
+    # Write to a temp file on Windows, then copy via /mnt/c
+    $tmpFile = [System.IO.Path]::GetTempFileName()
+    $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText($tmpFile, $Content, $utf8NoBom)
+    $wslTmp = $tmpFile -replace '\\','/' -replace 'C:','/mnt/c'
+    wsl -d $TestDistro -u root -- sh -c "cp '$wslTmp' '$Path' && chmod +x '$Path'"
+    Remove-Item $tmpFile -Force
+}
+
 # ── Cleanup ──────────────────────────────────────────────────────────────────
 function Remove-TestDistro {
-    $existing = wsl --list --quiet 2>$null | Where-Object { $_ -match $TestDistro }
-    if ($existing) {
+    # wsl --list outputs UTF-16 with null bytes — clean it up for matching
+    $raw = wsl --list --quiet 2>$null | Out-String
+    $clean = $raw -replace "`0", ""
+    if ($clean -match $TestDistro) {
         Write-Step "Removing test distro: $TestDistro"
         wsl --terminate $TestDistro 2>$null
         wsl --unregister $TestDistro
@@ -58,6 +72,10 @@ $bundle = Get-ChildItem -Path "$RepoRoot\airgap" -Filter "devenv-bundle-*.tar.gz
 if (-not $SkipBundle) {
     Write-Step "Creating airgap bundle..."
     wsl -d FedoraLinux-43 -u $TestUser -- bash -c "cd '$($RepoRoot -replace '\\','/' -replace 'C:','/mnt/c')' && bash airgap/bundle.sh"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Fail "Bundle creation failed (exit code: $LASTEXITCODE)"
+        exit 1
+    }
     $bundle = Get-ChildItem -Path "$RepoRoot\airgap" -Filter "devenv-bundle-*.tar.gz" |
         Sort-Object LastWriteTime -Descending | Select-Object -First 1
 }
@@ -98,22 +116,29 @@ rm -rf /home/$TestUser/.config/starship.toml
 rm -rf /home/$TestUser/.config/tmux
 rm -rf /home/$TestUser/.config/yazi
 rm -rf /home/$TestUser/.config/containers
+rm -rf /home/$TestUser/.config/opencode
+rm -rf /home/$TestUser/.config/codex
+rm -rf /home/$TestUser/.codex
 rm -f  /home/$TestUser/.zshrc /home/$TestUser/.zprofile /home/$TestUser/.gitconfig /home/$TestUser/.gitignore_global
 rm -rf /home/$TestUser/.cache/zsh
+# Remove any previous dotfiles repo copy (stow target)
+rm -rf /home/$TestUser/dotfiles
 echo 'Reset complete'
 "@
-wsl -d $TestDistro -u root -- sh -c $resetScript
+Write-WslScript -Path "/tmp/reset-distro.sh" -Content $resetScript
+wsl -d $TestDistro -u root -- bash /tmp/reset-distro.sh
 Write-Ok "Test distro reset to clean state"
 
 # ── Step 4: Simulate airgap (block network inside WSL) ──────────────────────
 Write-Step "Blocking network inside test distro (simulating airgap)..."
 
-# Drop all outbound traffic except loopback
+# Drop all outbound traffic except loopback using nftables (Fedora 43 default)
 $firewallScript = @"
 set -e
-iptables -F OUTPUT 2>/dev/null || true
-iptables -A OUTPUT -o lo -j ACCEPT
-iptables -A OUTPUT -j DROP
+nft flush ruleset
+nft add table inet filter
+nft add chain inet filter output '{ type filter hook output priority 0; policy drop; }'
+nft add rule inet filter output oifname lo accept
 
 # Verify: this curl SHOULD fail
 if curl -s --max-time 3 https://github.com >/dev/null 2>&1; then
@@ -123,8 +148,13 @@ else
     echo 'Network blocked — airgap simulation active'
 fi
 "@
-wsl -d $TestDistro -u root -- sh -c $firewallScript
-Write-Ok "Network blocked via iptables"
+Write-WslScript -Path "/tmp/block-network.sh" -Content $firewallScript
+wsl -d $TestDistro -u root -- bash /tmp/block-network.sh
+if ($LASTEXITCODE -ne 0) {
+    Write-Fail "Network blocking failed (exit code: $LASTEXITCODE)"
+    exit 1
+}
+Write-Ok "Network blocked via nftables"
 
 # ── Step 5: Copy bundle + repo into the test distro ─────────────────────────
 Write-Step "Copying repo and bundle into test distro..."
@@ -132,16 +162,23 @@ Write-Step "Copying repo and bundle into test distro..."
 $wslRepoRoot = $RepoRoot -replace '\\','/' -replace 'C:','/mnt/c'
 $wslBundle = $bundle.FullName -replace '\\','/' -replace 'C:','/mnt/c'
 
-# Copy the repo (via /mnt/c which is always available) to a local ext4 path
+# Copy the repo (via /mnt/c which is always available) to a persistent ext4 path.
+# MUST NOT use /tmp — systemd cleans it on restart, breaking stow symlinks.
+$dotfilesDir = "/home/$TestUser/dotfiles"
 $copyScript = @"
 set -e
-rm -rf /tmp/dotfiles-test
-cp -a '$wslRepoRoot' /tmp/dotfiles-test
-cp '$wslBundle' /tmp/dotfiles-test/airgap/
-chown -R ${TestUser}:${TestUser} /tmp/dotfiles-test
-echo 'Repo and bundle copied to /tmp/dotfiles-test'
+rm -rf $dotfilesDir
+cp -a '$wslRepoRoot' $dotfilesDir
+cp '$wslBundle' $dotfilesDir/airgap/
+chown -R ${TestUser}:${TestUser} $dotfilesDir
+echo 'Repo and bundle copied to $dotfilesDir'
 "@
-wsl -d $TestDistro -u root -- sh -c $copyScript
+Write-WslScript -Path "/tmp/copy-repo.sh" -Content $copyScript
+wsl -d $TestDistro -u root -- bash /tmp/copy-repo.sh
+if ($LASTEXITCODE -ne 0) {
+    Write-Fail "File copy failed (exit code: $LASTEXITCODE)"
+    exit 1
+}
 Write-Ok "Files staged in test distro"
 
 # ── Step 6: Run deploy.sh ───────────────────────────────────────────────────
@@ -149,18 +186,34 @@ Write-Step "Running airgap deployment..."
 
 $deployScript = @"
 set -e
-cd /tmp/dotfiles-test
+cd $dotfilesDir
 bash airgap/deploy.sh --user $TestUser --force airgap/$($bundle.Name)
 "@
-wsl -d $TestDistro -u root -- sh -c $deployScript
+Write-WslScript -Path "/tmp/run-deploy.sh" -Content $deployScript
+wsl -d $TestDistro -u root -- bash /tmp/run-deploy.sh
+if ($LASTEXITCODE -ne 0) {
+    Write-Fail "Deployment failed (exit code: $LASTEXITCODE)"
+    exit 1
+}
 Write-Ok "Deployment completed"
 
 # ── Step 7: Verify tools ────────────────────────────────────────────────────
 Write-Step "Verifying installed tools..."
 
+# Write verification script to a file inside the test distro, then run it.
+# Passing multiline scripts via sh -c from PowerShell mangles the content.
 $verifyScript = @'
 #!/usr/bin/env bash
 set -euo pipefail
+
+# Ensure HOME is set correctly (imported WSL distros may not set it)
+HOME="$(getent passwd "$(id -un)" | cut -d: -f6)"
+export HOME
+
+# Tools are installed to ~/.local/bin
+BIN="$HOME/.local/bin"
+export PATH="$BIN:$PATH"
+
 passed=0 failed=0 total=0
 
 check() {
@@ -176,39 +229,43 @@ check() {
 }
 
 echo "Tool verification:"
-check "starship"   "starship --version"
-check "zoxide"     "zoxide --version"
-check "fzf"        "fzf --version"
-check "bat"        "bat --version"
-check "eza"        "eza --version"
-check "ripgrep"    "rg --version"
-check "fd"         "fd --version"
-check "yazi"       "yazi --version"
-check "lazygit"    "lazygit --version"
-check "delta"      "delta --version"
-check "nvim"       "nvim --version"
-check "uv"         "uv --version"
-check "glab"       "glab --version"
-check "jf"         "jf --version"
-check "helm"       "helm version --short"
-check "oc"         "oc version --client"
+check "starship"   "$BIN/starship --version"
+check "zoxide"     "$BIN/zoxide --version"
+check "fzf"        "$BIN/fzf --version"
+check "bat"        "$BIN/bat --version"
+check "eza"        "$BIN/eza --version"
+check "ripgrep"    "$BIN/rg --version"
+check "fd"         "$BIN/fd --version"
+check "yazi"       "test -x $BIN/yazi"
+check "lazygit"    "$BIN/lazygit --version"
+check "delta"      "$BIN/delta --version"
+check "nvim"       "$BIN/nvim --version"
+check "uv"         "$BIN/uv --version"
+check "glab"       "$BIN/glab --version"
+check "jf"         "$BIN/jf --version"
+check "helm"       "$BIN/helm version --short"
+check "oc"         "$BIN/oc version --client"
 
 echo ""
 echo "Config verification:"
+# Stow may symlink parent dirs, so check file existence (-f) not symlink (-L).
+# For top-level dotfiles (e.g. .zshrc), stow creates file-level symlinks.
 check "zshrc"         "test -L ~/.zshrc"
-check "starship.toml" "test -L ~/.config/starship.toml"
-check "nvim config"   "test -L ~/.config/nvim/init.lua"
-check "tmux.conf"     "test -L ~/.config/tmux/tmux.conf"
-check "yazi.toml"     "test -L ~/.config/yazi/yazi.toml"
+check "starship.toml" "test -f ~/.config/starship.toml"
+check "nvim config"   "test -f ~/.config/nvim/init.lua"
+check "tmux.conf"     "test -f ~/.config/tmux/tmux.conf"
+check "yazi.toml"     "test -f ~/.config/yazi/yazi.toml"
 check "gitconfig"     "test -L ~/.gitconfig"
-check "registries"    "test -L ~/.config/containers/registries.conf"
+check "registries"    "test -f ~/.config/containers/registries.conf"
 check "zinit"         "test -d ~/.local/share/zinit/zinit.git"
 
 echo ""
 echo "Results: $passed/$total passed, $failed failed"
 exit $failed
 '@
-$verifyResult = wsl -d $TestDistro -u $TestUser -- sh -c $verifyScript
+
+Write-WslScript -Path "/tmp/verify-tools.sh" -Content $verifyScript
+$verifyResult = wsl -d $TestDistro -u $TestUser -- bash /tmp/verify-tools.sh
 $verifyResult | ForEach-Object { Write-Host $_ }
 
 # ── Step 8: Summary ─────────────────────────────────────────────────────────

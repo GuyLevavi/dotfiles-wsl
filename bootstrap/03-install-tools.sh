@@ -9,7 +9,7 @@ set -euo pipefail
 # To pin a specific version, set it before running:
 #   NEOVIM_VERSION=0.11.6 ./03-install-tools.sh
 
-# ===== Helper: resolve latest GitHub release tag =====
+# ===== Helpers: resolve latest release tags =====
 # Returns the latest release version (without the "v" prefix).
 # Falls back to $2 if the API call fails.
 gh_latest() {
@@ -21,11 +21,29 @@ gh_latest() {
     if [[ -n "$tag" ]]; then
         echo "$tag"
     elif [[ -n "$fallback" ]]; then
-        echo "$fallback" >&2
         echo "   (fallback: GitHub API unreachable, using ${fallback})" >&2
         echo "$fallback"
     else
         echo "ERROR: Could not resolve latest version for ${repo}" >&2
+        return 1
+    fi
+}
+
+# Same as gh_latest but for GitLab-hosted repos (e.g. gitlab-org/cli).
+gl_latest() {
+    local project="$1" fallback="${2:-}"
+    local encoded tag
+    encoded="$(echo "$project" | sed 's|/|%2F|g')"
+    tag="$(curl -sL --retry 1 --max-time 5 \
+        "https://gitlab.com/api/v4/projects/${encoded}/releases" \
+        | grep -o '"tag_name":"[^"]*"' | head -1 | sed 's/.*"v\?\([^"]*\)".*/\1/')" || true
+    if [[ -n "$tag" ]]; then
+        echo "$tag"
+    elif [[ -n "$fallback" ]]; then
+        echo "   (fallback: GitLab API unreachable, using ${fallback})" >&2
+        echo "$fallback"
+    else
+        echo "ERROR: Could not resolve latest version for ${project}" >&2
         return 1
     fi
 }
@@ -48,7 +66,7 @@ resolve_versions() {
     DELTA_VERSION="${DELTA_VERSION:-$(gh_latest dandavison/delta)}"
     NEOVIM_VERSION="${NEOVIM_VERSION:-$(gh_latest neovim/neovim)}"
     UV_VERSION="${UV_VERSION:-$(gh_latest astral-sh/uv)}"
-    GLAB_VERSION="${GLAB_VERSION:-$(gh_latest gitlab-org/cli)}"
+    GLAB_VERSION="${GLAB_VERSION:-$(gl_latest gitlab-org/cli)}"
     JFROG_CLI_VERSION="${JFROG_CLI_VERSION:-2.72.2}"  # no GitHub releases page
     HELM_VERSION="${HELM_VERSION:-$(gh_latest helm/helm)}"
     OC_VERSION="${OC_VERSION:-4.17}"                  # uses stable-X.Y channel, not a tag
