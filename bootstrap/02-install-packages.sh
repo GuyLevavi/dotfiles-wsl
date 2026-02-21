@@ -29,7 +29,7 @@ esac
 # These are needed on both online and offline machines.
 RUNTIME_PKGS=(
     curl wget unzip tar gzip bzip2 xz which file tree htop procps-ng
-    zsh tmux stow git git-lfs
+    zsh tmux stow git git-lfs gawk
     nodejs npm
     podman buildah skopeo fuse-overlayfs
     python3-devel python3-pip
