@@ -109,15 +109,21 @@ fi
 # ===== Step 2: System packages =====
 log "Step 2/5: System packages"
 if [[ "$(id -u)" -eq 0 && -f "$REPO_ROOT/bootstrap/02-install-packages.sh" ]]; then
-    # Skip DNF in airgap environments — it hangs when network is blocked.
-    # Packages should already be on the base image.
     if curl -s --max-time 3 https://fedoraproject.org >/dev/null 2>&1; then
+        # Online: install via DNF repos
         bash "$REPO_ROOT/bootstrap/02-install-packages.sh" --minimal 2>&1 || warn "DNF failed"
+    elif [[ -d "$CACHE/rpms" ]] && ls "$CACHE/rpms/"*.rpm &>/dev/null; then
+        # Offline: install from cached RPMs
+        log "Installing system packages from cached RPMs..."
+        bash "$REPO_ROOT/bootstrap/02-install-packages.sh" --offline "$CACHE/rpms" 2>&1 || warn "RPM install failed"
+        ok "System packages installed from cache"
     else
-        warn "Network unavailable — skipping DNF (packages must already be on the base image)"
+        warn "Network unavailable and no cached RPMs found in $CACHE/rpms/"
+        warn "System packages (stow, zsh, podman, etc.) will be MISSING."
+        warn "Re-run bundle.sh on a Fedora/RHEL host to include RPMs."
     fi
 else
-    warn "Skipping DNF (not root or script missing)"
+    warn "Skipping system packages (not root or script missing)"
 fi
 
 # ===== Step 3: CLI tools (offline) =====
@@ -130,11 +136,16 @@ ok "CLI tools installed"
 log "Step 4/5: Dotfiles"
 if $is_update && ! $FORCE; then
     warn "Skipping stow (use --force)"
-elif [[ -f "$REPO_ROOT/bootstrap/04-stow-dotfiles.sh" ]] && command -v stow &>/dev/null; then
-    run_as_user bash "$REPO_ROOT/bootstrap/04-stow-dotfiles.sh"
-    ok "Dotfiles stowed"
+elif [[ -f "$REPO_ROOT/bootstrap/04-stow-dotfiles.sh" ]]; then
+    if command -v stow &>/dev/null; then
+        run_as_user bash "$REPO_ROOT/bootstrap/04-stow-dotfiles.sh"
+        ok "Dotfiles stowed"
+    else
+        warn "stow is NOT installed — dotfiles cannot be symlinked."
+        warn "Ensure system packages were installed (step 2). Deployment is incomplete."
+    fi
 else
-    warn "Skipping (stow missing or script not found)"
+    warn "Skipping (04-stow-dotfiles.sh not found)"
 fi
 
 # ===== Step 5: Shell setup (zsh, zinit, plugins) =====

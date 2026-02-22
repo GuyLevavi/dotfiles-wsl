@@ -194,6 +194,66 @@ jobs:
           done
           exit $FAIL
 
+      - name: Airgap RPM pipeline is wired up
+        run: |
+          FAIL=0
+          # bundle.sh must download RPMs into cache/rpms/
+          grep -q 'rpms' airgap/bundle.sh \
+            || { echo "FAIL: bundle.sh has no RPM download step"; FAIL=1; }
+          grep -q 'dnf download' airgap/bundle.sh \
+            || { echo "FAIL: bundle.sh missing 'dnf download' for RPMs"; FAIL=1; }
+          # deploy.sh must use cached RPMs when offline
+          grep -q '\-\-offline.*rpms' airgap/deploy.sh \
+            || { echo "FAIL: deploy.sh does not pass --offline with RPM dir"; FAIL=1; }
+          # 02-install-packages.sh must support --offline flag
+          grep -q '\-\-offline' bootstrap/02-install-packages.sh \
+            || { echo "FAIL: 02-install-packages.sh missing --offline support"; FAIL=1; }
+          # RUNTIME_PKGS in bundle.sh must include critical packages
+          for pkg in stow podman zsh tmux; do
+            grep -q "$pkg" airgap/bundle.sh \
+              || { echo "FAIL: bundle.sh RUNTIME_PKGS missing $pkg"; FAIL=1; }
+          done
+          [ $FAIL -eq 0 ] && echo "OK: airgap RPM pipeline is properly wired"
+          exit $FAIL
+
+      - name: RUNTIME_PKGS in bundle.sh match 02-install-packages.sh
+        run: |
+          # Extract package names from both files and compare
+          extract_pkgs() {
+            # Find RUNTIME_PKGS array, extract package names between ( and )
+            sed -n '/^RUNTIME_PKGS=/,/^)/p' "$1" \
+              | grep -v '^RUNTIME_PKGS=\|^)' \
+              | tr -s ' ' '\n' \
+              | grep -v '^$'
+          }
+          BUNDLE_PKGS=$(extract_pkgs airgap/bundle.sh | sort)
+          INSTALL_PKGS=$(extract_pkgs bootstrap/02-install-packages.sh | sort)
+          if [ "$BUNDLE_PKGS" != "$INSTALL_PKGS" ]; then
+            echo "FAIL: RUNTIME_PKGS mismatch between bundle.sh and 02-install-packages.sh"
+            diff <(echo "$BUNDLE_PKGS") <(echo "$INSTALL_PKGS") || true
+            exit 1
+          fi
+          echo "OK: RUNTIME_PKGS arrays match"
+
+      - name: Dockerfile packages match RUNTIME_PKGS
+        run: |
+          # Extract the dnf install line from Dockerfile and compare
+          DOCKER_PKGS=$(sed -n '/^RUN dnf install/,/dnf clean/p' Dockerfile \
+            | grep -v 'dnf\|&&\|rm ' \
+            | tr -s ' \\' '\n' \
+            | sed 's/^[ \t]*//' \
+            | grep -v '^$' | sort)
+          INSTALL_PKGS=$(sed -n '/^RUNTIME_PKGS=/,/^)/p' bootstrap/02-install-packages.sh \
+            | grep -v '^RUNTIME_PKGS=\|^)' \
+            | tr -s ' ' '\n' \
+            | grep -v '^$' | sort)
+          if [ "$DOCKER_PKGS" != "$INSTALL_PKGS" ]; then
+            echo "FAIL: Dockerfile packages don't match RUNTIME_PKGS"
+            diff <(echo "$DOCKER_PKGS") <(echo "$INSTALL_PKGS") || true
+            exit 1
+          fi
+          echo "OK: Dockerfile packages match RUNTIME_PKGS"
+
   zshrc-guards:
     name: Zsh tool guards
     runs-on: ubuntu-latest
@@ -231,3 +291,123 @@ jobs:
             fi
           done
           exit $FAIL
+
+  # ── Heavy checks (full airgap integration test) ────────────────────
+  airgap-integration:
+    name: Airgap integration (Fedora 43)
+    runs-on: ubuntu-latest
+    container:
+      image: registry.fedoraproject.org/fedora:43
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build deps
+        run: dnf install -y curl git tar gzip sudo
+
+      - name: Create test user
+        run: |
+          bash bootstrap/01-create-user.sh gl
+
+      - name: Build airgap bundle (with RPMs)
+        run: bash airgap/bundle.sh
+
+      - name: Verify bundle contains RPMs
+        run: |
+          BUNDLE=$(ls airgap/devenv-bundle-*.tar.gz | head -1)
+          echo "Bundle: $BUNDLE ($(du -h "$BUNDLE" | cut -f1))"
+          # Check rpms/ dir exists inside the tarball
+          tar -tzf "$BUNDLE" | grep -q 'cache/rpms/' \
+            || { echo "FAIL: bundle missing cache/rpms/"; exit 1; }
+          RPM_COUNT=$(tar -tzf "$BUNDLE" | grep -c '\.rpm$')
+          echo "RPMs in bundle: $RPM_COUNT"
+          [ "$RPM_COUNT" -gt 0 ] || { echo "FAIL: no RPMs in bundle"; exit 1; }
+
+      - name: Remove system packages (simulate bare machine)
+        run: |
+          # Remove packages that deploy.sh should reinstall from cached RPMs.
+          # Keep bash, coreutils, dnf, rpm, sudo — needed to run deploy itself.
+          dnf remove -y stow podman buildah skopeo fuse-overlayfs \
+              tmux ShellCheck tree htop 2>/dev/null || true
+          # Verify they're actually gone
+          for cmd in stow podman buildah skopeo tmux; do
+            command -v "$cmd" 2>/dev/null \
+              && { echo "FAIL: $cmd still installed after removal"; exit 1; }
+          done
+          echo "System packages removed successfully"
+
+      - name: Run airgap deploy
+        run: |
+          BUNDLE=$(ls airgap/devenv-bundle-*.tar.gz | head -1)
+          bash airgap/deploy.sh --user gl --force "$BUNDLE"
+
+      - name: Verify system packages restored
+        run: |
+          FAIL=0
+          for cmd in stow zsh tmux git podman buildah skopeo jq node npm python3; do
+            if command -v "$cmd" >/dev/null 2>&1; then
+              echo "  + $cmd"
+            else
+              echo "  X $cmd MISSING"
+              FAIL=$((FAIL + 1))
+            fi
+          done
+          [ $FAIL -eq 0 ] || { echo "FAIL: $FAIL system packages missing"; exit 1; }
+          echo "All system packages verified"
+
+      - name: Verify CLI tools installed
+        run: |
+          BIN="/home/gl/.local/bin"
+          FAIL=0
+          for tool in starship zoxide fzf bat eza rg fd lazygit delta nvim uv glab jf helm oc; do
+            if [ -x "$BIN/$tool" ] || [ -x "$BIN/$tool.appimage" ]; then
+              echo "  + $tool"
+            else
+              echo "  X $tool MISSING"
+              FAIL=$((FAIL + 1))
+            fi
+          done
+          [ $FAIL -eq 0 ] || { echo "FAIL: $FAIL tools missing"; exit 1; }
+          echo "All CLI tools verified"
+
+      - name: Verify dotfiles stowed
+        run: |
+          FAIL=0
+          check() {
+            if eval "$2" 2>/dev/null; then echo "  + $1"; else echo "  X $1"; FAIL=$((FAIL+1)); fi
+          }
+          check "zshrc"         "test -e /home/gl/.zshrc"
+          check "starship.toml" "test -f /home/gl/.config/starship.toml"
+          check "nvim config"   "test -f /home/gl/.config/nvim/init.lua"
+          check "tmux.conf"     "test -f /home/gl/.config/tmux/tmux.conf"
+          check "gitconfig"     "test -e /home/gl/.gitconfig"
+          check "registries"    "test -f /home/gl/.config/containers/registries.conf"
+          check "zinit"         "test -d /home/gl/.local/share/zinit/zinit.git"
+          [ $FAIL -eq 0 ] || { echo "FAIL: $FAIL configs missing"; exit 1; }
+          echo "All dotfiles verified"
+
+  # ── Docker build test ──────────────────────────────────────────────
+  docker-build:
+    name: Docker build test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t dotfiles-wsl-test .
+
+      - name: Verify image contents
+        run: |
+          FAIL=0
+          for cmd in stow zsh tmux git podman buildah skopeo jq node npm python3; do
+            if docker run --rm dotfiles-wsl-test command -v "$cmd" >/dev/null 2>&1; then
+              echo "  + $cmd"
+            else
+              echo "  X $cmd MISSING"
+              FAIL=$((FAIL + 1))
+            fi
+          done
+          # Check user exists
+          docker run --rm dotfiles-wsl-test id gl >/dev/null 2>&1 \
+            || { echo "  X user gl missing"; FAIL=$((FAIL + 1)); }
+          [ $FAIL -eq 0 ] || { echo "FAIL: $FAIL checks failed"; exit 1; }
+          echo "Docker image verified"
