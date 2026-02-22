@@ -16,6 +16,7 @@ DRY_RUN=false
 log()  { echo "==> $*"; }
 ok()   { echo "  + $*"; }
 skip() { echo "  . $* (cached)"; }
+warn() { echo "  ! $*" >&2; }
 
 # download URL FILENAME — fetch into cache, skip if exists
 download() {
@@ -69,6 +70,40 @@ download "https://github.com/dandavison/delta/releases/download/${DELTA_VERSION}
 download "https://github.com/neovim/neovim/releases/download/v${NEOVIM_VERSION}/nvim-linux-x86_64.appimage" nvim.appimage
 download "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" helm.tar.gz
 download "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable-${OC_VERSION}/openshift-client-linux.tar.gz" oc.tar.gz
+
+# ===== System RPM packages =====
+# Download RUNTIME_PKGS from 02-install-packages.sh so they can be installed
+# offline via `dnf localinstall`. Requires running on a Fedora/RHEL host.
+echo ""
+log "System RPM packages"
+RPM_DIR="${CACHE}/rpms"
+RUNTIME_PKGS=(
+    curl wget unzip tar gzip bzip2 xz which file tree htop procps-ng
+    zsh tmux stow git git-lfs gawk
+    nodejs npm
+    podman buildah skopeo fuse-overlayfs
+    python3-devel python3-pip
+    jq ShellCheck
+)
+if $DRY_RUN; then
+    if [[ -d "$RPM_DIR" && "$(ls -A "$RPM_DIR" 2>/dev/null)" ]]; then
+        skip "rpms/ ($(ls "$RPM_DIR"/*.rpm 2>/dev/null | wc -l) RPMs cached)"
+    else
+        echo "  ~ [dry] rpms/ (${#RUNTIME_PKGS[@]} packages to download)"
+    fi
+elif command -v dnf &>/dev/null; then
+    if [[ -d "$RPM_DIR" && "$(ls -A "$RPM_DIR" 2>/dev/null)" ]]; then
+        skip "rpms/ ($(ls "$RPM_DIR"/*.rpm 2>/dev/null | wc -l) RPMs)"
+    else
+        mkdir -p "$RPM_DIR"
+        echo "  Downloading RPMs (this may take a minute)..."
+        dnf download --resolve --alldeps --destdir="$RPM_DIR" "${RUNTIME_PKGS[@]}" 2>&1 \
+            | tail -1
+        ok "rpms/ ($(ls "$RPM_DIR"/*.rpm 2>/dev/null | wc -l) RPMs)"
+    fi
+else
+    warn "dnf not found — skipping RPM download (bundle must be created on Fedora/RHEL)"
+fi
 
 # ===== Zsh plugins =====
 echo ""

@@ -2,18 +2,52 @@
 set -euo pipefail
 # 02-install-packages.sh — Install system packages via DNF
 # Usage:
-#   sudo ./02-install-packages.sh              # full install (online machine)
-#   sudo ./02-install-packages.sh --minimal    # runtime only (airgap target)
+#   sudo ./02-install-packages.sh                      # full install (online)
+#   sudo ./02-install-packages.sh --minimal             # runtime only (online)
+#   sudo ./02-install-packages.sh --offline RPM_DIR     # install from local RPMs
 #
 # The --minimal flag skips C/C++ compilers and -devel headers (~250 MB).
 # These are only needed if you build Python packages from source (pip install
 # with C extensions). If your airgapped network has Artifactory serving
 # pre-built wheels, you won't need them.
+#
+# The --offline flag installs pre-downloaded RPMs from RPM_DIR (no network).
+# Used by airgap/deploy.sh with RPMs cached by airgap/bundle.sh.
 
 [[ $EUID -ne 0 ]] && { echo "Run as root (sudo)." >&2; exit 1; }
 
 MINIMAL=false
-[[ "${1:-}" == "--minimal" ]] && MINIMAL=true
+OFFLINE=false
+RPM_DIR=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --minimal) MINIMAL=true; shift ;;
+        --offline) OFFLINE=true; RPM_DIR="${2:-}"; shift 2 ;;
+        *) echo "Unknown: $1" >&2; exit 1 ;;
+    esac
+done
+
+# ── Offline mode: install from cached RPMs ───────────────────────────────────
+if $OFFLINE; then
+    if [[ -z "$RPM_DIR" || ! -d "$RPM_DIR" ]]; then
+        echo "ERROR: --offline requires a directory of RPMs (got: '${RPM_DIR:-}')" >&2
+        exit 1
+    fi
+    rpm_count="$(find "$RPM_DIR" -name '*.rpm' | wc -l)"
+    if [[ "$rpm_count" -eq 0 ]]; then
+        echo "ERROR: No RPMs found in $RPM_DIR" >&2
+        exit 1
+    fi
+    echo "==> Installing $rpm_count RPMs from $RPM_DIR (offline mode)..."
+    dnf install -y --disablerepo='*' "$RPM_DIR"/*.rpm 2>&1 || {
+        echo "  ! dnf localinstall failed, trying rpm directly..."
+        rpm -Uvh --force --nodeps "$RPM_DIR"/*.rpm 2>&1 || true
+    }
+    echo "Done (offline). Next: bash bootstrap/03-install-tools.sh"
+    exit 0
+fi
+
+# ── Online mode ──────────────────────────────────────────────────────────────
 
 # Enable EPEL on RHEL-family distros (not needed on Fedora)
 source /etc/os-release

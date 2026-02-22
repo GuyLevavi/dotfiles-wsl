@@ -124,6 +124,10 @@ rm -f  /home/$TestUser/.zshrc /home/$TestUser/.zprofile /home/$TestUser/.gitconf
 rm -rf /home/$TestUser/.cache/zsh
 # Remove any previous dotfiles repo copy (stow target)
 rm -rf /home/$TestUser/dotfiles
+# Remove system packages that deploy.sh should install from cached RPMs.
+# This ensures the airgap RPM pipeline is actually tested.
+# Keep bash, coreutils, dnf, rpm — they're needed to run the deploy script itself.
+dnf remove -y stow podman buildah skopeo fuse-overlayfs tmux ShellCheck 2>/dev/null || true
 echo 'Reset complete'
 "@
 Write-WslScript -Path "/tmp/reset-distro.sh" -Content $resetScript
@@ -264,6 +268,20 @@ check "yazi.toml"     "test -f ~/.config/yazi/yazi.toml"
 check "gitconfig"     "test -L ~/.gitconfig"
 check "registries"    "test -f ~/.config/containers/registries.conf"
 check "zinit"         "test -d ~/.local/share/zinit/zinit.git"
+
+echo ""
+echo "System package verification:"
+check "stow"      "command -v stow"
+check "zsh"       "command -v zsh"
+check "tmux"      "command -v tmux"
+check "git"       "command -v git"
+check "podman"    "command -v podman"
+check "buildah"   "command -v buildah"
+check "skopeo"    "command -v skopeo"
+check "nodejs"    "command -v node"
+check "npm"       "command -v npm"
+check "jq"        "command -v jq"
+check "python3"   "command -v python3"
 
 echo ""
 echo "Plugin verification (zinit offline cache):"
