@@ -31,6 +31,7 @@ jobs:
       - name: Upload bundle as release asset
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           dnf install -y gh
           BUNDLE=$(ls airgap/devenv-bundle-*.tar.gz | head -1)
@@ -41,8 +42,13 @@ jobs:
   docker:
     name: Docker image
     runs-on: ubuntu-latest
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Lowercase image name
+        run: echo "IMAGE=${IMAGE,,}" >> "$GITHUB_ENV"
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -57,5 +63,5 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:${{ github.ref_name }}
-            ghcr.io/${{ github.repository }}:latest
+            ${{ env.IMAGE }}:${{ github.ref_name }}
+            ${{ env.IMAGE }}:latest
