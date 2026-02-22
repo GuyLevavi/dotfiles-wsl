@@ -35,7 +35,24 @@ run_as_user() {
         "$@"
     fi
 }
-USER_HOME="$(eval echo "~${TARGET_USER}")"
+
+# Resolve USER_HOME — deferred to a function because the user may not exist
+# yet at parse time (01-create-user.sh runs later). Using eval echo ~user
+# before the user exists returns the literal string "~user", which silently
+# creates directories in the wrong place.
+resolve_user_home() {
+    local home
+    home="$(getent passwd "$TARGET_USER" 2>/dev/null | cut -d: -f6)"
+    if [[ -z "$home" ]]; then
+        home="$(eval echo "~${TARGET_USER}")"
+    fi
+    # Last resort: if still a literal tilde, guess /home/USER
+    if [[ "$home" == "~"* ]]; then
+        home="/home/${TARGET_USER}"
+    fi
+    echo "$home"
+}
+USER_HOME="$(resolve_user_home)"
 
 # ===== Locate repo root =====
 # deploy.sh lives at <repo>/airgap/deploy.sh
@@ -77,6 +94,17 @@ ln -sfn "$CACHE" "$REPO_ROOT/airgap/cache"
 chmod -R a+rX "$CACHE"  # ensure target user can read cache files
 ok "Cache linked: $CACHE"
 
+# ===== Step 1: Create user =====
+log "Step 1/5: User setup"
+if [[ "$(id -u)" -eq 0 ]] && ! id "$TARGET_USER" &>/dev/null; then
+    [[ -f "$REPO_ROOT/bootstrap/01-create-user.sh" ]] && bash "$REPO_ROOT/bootstrap/01-create-user.sh" "$TARGET_USER"
+    # Re-resolve now that the user exists in /etc/passwd
+    USER_HOME="$(resolve_user_home)"
+    ok "User $TARGET_USER created (home: $USER_HOME)"
+else
+    ok "User $TARGET_USER exists (home: $USER_HOME)"
+fi
+
 # ===== Backup existing configs if --force =====
 is_update=false
 for f in "$USER_HOME/.local/bin/nvim" "$USER_HOME/.zshrc" "$USER_HOME/.config/nvim"; do
@@ -95,15 +123,6 @@ if $is_update && $FORCE; then
     ok "Backed up to $backup"
 elif $is_update && ! $FORCE; then
     warn "Existing install detected. Use --force to overwrite (backups created automatically)."
-fi
-
-# ===== Step 1: Create user =====
-log "Step 1/5: User setup"
-if [[ "$(id -u)" -eq 0 ]] && ! id "$TARGET_USER" &>/dev/null; then
-    [[ -f "$REPO_ROOT/bootstrap/01-create-user.sh" ]] && bash "$REPO_ROOT/bootstrap/01-create-user.sh" "$TARGET_USER"
-    ok "User $TARGET_USER created"
-else
-    ok "User $TARGET_USER exists"
 fi
 
 # ===== Step 2: System packages =====
