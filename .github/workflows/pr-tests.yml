@@ -1,0 +1,233 @@
+name: PR Tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  # ── Fast checks (~10s each, no special container needed) ──────────
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ShellCheck
+        run: |
+          shellcheck --severity=warning \
+            bootstrap/01-create-user.sh \
+            bootstrap/02-install-packages.sh \
+            bootstrap/03-install-tools.sh \
+            bootstrap/04-stow-dotfiles.sh \
+            bootstrap/05-setup-shell.sh \
+            airgap/bundle.sh \
+            airgap/deploy.sh \
+            airgap/artifactory-push.sh
+
+  lua-syntax:
+    name: Lua syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install lua
+        run: sudo apt-get update && sudo apt-get install -y lua5.4
+      - name: Check Lua syntax (luac -p)
+        run: |
+          FAIL=0
+          for f in \
+            nvim/.config/nvim/init.lua \
+            nvim/.config/nvim/lua/config/lazy.lua \
+            nvim/.config/nvim/lua/config/options.lua \
+            nvim/.config/nvim/lua/config/keymaps.lua \
+            nvim/.config/nvim/lua/config/autocmds.lua \
+            nvim/.config/nvim/lua/plugins/colorscheme.lua \
+            nvim/.config/nvim/lua/plugins/editor.lua \
+            nvim/.config/nvim/lua/plugins/python.lua \
+            nvim/.config/nvim/lua/plugins/git.lua \
+            nvim/.config/nvim/lua/plugins/treesitter.lua \
+            nvim/.config/nvim/lua/plugins/jupyter.lua \
+            wezterm/.wezterm.lua; do
+            if luac5.4 -p "$f" 2>&1; then
+              echo "  OK: $f"
+            else
+              echo "  FAIL: $f"
+              FAIL=1
+            fi
+          done
+          exit $FAIL
+
+  config-syntax:
+    name: Config file syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate TOML files
+        run: |
+          python3 -c "import tomllib; tomllib.load(open('starship/.config/starship.toml', 'rb'))"
+          python3 -c "import tomllib; tomllib.load(open('yazi/.config/yazi/yazi.toml', 'rb'))"
+          python3 -c "import tomllib; tomllib.load(open('codex/.codex/config.toml', 'rb'))"
+          echo "OK: all TOML files valid"
+      - name: Validate JSON files
+        run: |
+          python3 -c "import json; json.load(open('opencode/.config/opencode/opencode.json'))"
+          python3 -c "import json; json.load(open('nvim/.config/nvim/lazyvim.json'))"
+          python3 -c "import json; json.load(open('nvim/.config/nvim/lazy-lock.json'))"
+          echo "OK: all JSON files valid"
+      - name: Validate gitconfig
+        run: |
+          git config --file git/.gitconfig --list > /dev/null
+          echo "OK: .gitconfig parses"
+
+  config-values:
+    name: Config value checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: OpenCode theme must be "tokyonight" (no hyphen)
+        run: |
+          THEME=$(python3 -c "import json; print(json.load(open('opencode/.config/opencode/opencode.json'))['theme'])")
+          [ "$THEME" = "tokyonight" ] || { echo "FAIL: theme is '$THEME', must be 'tokyonight'"; exit 1; }
+
+      - name: Colorblind accessibility (orange #ff9e64 for errors)
+        run: |
+          grep -q '#ff9e64' starship/.config/starship.toml \
+            || { echo "FAIL: starship.toml missing colorblind-safe #ff9e64"; exit 1; }
+
+      - name: Git pager uses delta
+        run: |
+          git config --file git/.gitconfig core.pager | grep -q delta \
+            || { echo "FAIL: .gitconfig core.pager is not delta"; exit 1; }
+
+      - name: LazyVim extras in lazy.lua, not lazyvim.json
+        run: |
+          EXTRAS=$(python3 -c "import json; d=json.load(open('nvim/.config/nvim/lazyvim.json')); print(len(d.get('extras',[])))")
+          [ "$EXTRAS" = "0" ] || { echo "FAIL: lazyvim.json has $EXTRAS extras (should be in lazy.lua)"; exit 1; }
+          for extra in lang.python lang.docker lang.yaml lang.json lang.markdown dap.core editor.mini-files util.mini-hipatterns; do
+            grep -q "$extra" nvim/.config/nvim/lua/config/lazy.lua \
+              || { echo "FAIL: lazy.lua missing import for $extra"; exit 1; }
+          done
+
+      - name: lazy-lock.json integrity
+        run: |
+          python3 -c "
+          import json, sys
+          lock = json.load(open('nvim/.config/nvim/lazy-lock.json'))
+          required = ['LazyVim', 'lazy.nvim', 'tokyonight.nvim']
+          errors = []
+          for name, info in lock.items():
+              if 'commit' not in info:
+                  errors.append(f'{name}: missing commit')
+          for req in required:
+              if req not in lock:
+                  errors.append(f'{req}: required plugin not in lock file')
+          if errors:
+              for e in errors:
+                  print(f'FAIL: {e}')
+              sys.exit(1)
+          print(f'OK: lazy-lock.json has {len(lock)} plugins, all required present')
+          "
+
+  stow-structure:
+    name: Stow package structure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify stow package files exist
+        run: |
+          FAIL=0
+          for f in \
+            zsh/.zshrc \
+            zsh/.zprofile \
+            starship/.config/starship.toml \
+            nvim/.config/nvim/init.lua \
+            nvim/.config/nvim/lua/config/lazy.lua \
+            nvim/.config/nvim/lazyvim.json \
+            nvim/.config/nvim/lazy-lock.json \
+            tmux/.config/tmux/tmux.conf \
+            yazi/.config/yazi/yazi.toml \
+            git/.gitconfig \
+            git/.gitignore_global \
+            podman/.config/containers/registries.conf \
+            opencode/.config/opencode/opencode.json \
+            codex/.codex/config.toml; do
+            if test -f "$f"; then
+              echo "  OK: $f"
+            else
+              echo "  FAIL: $f"
+              FAIL=1
+            fi
+          done
+          exit $FAIL
+
+      - name: PACKAGES array matches repo directories
+        run: |
+          # Extract PACKAGES array from 04-stow-dotfiles.sh
+          EXPECTED="zsh starship nvim tmux yazi git podman opencode codex"
+          for pkg in $EXPECTED; do
+            test -d "$pkg" || { echo "FAIL: stow package dir '$pkg' missing"; exit 1; }
+          done
+          echo "OK: all stow package directories exist"
+
+  cache-contract:
+    name: Bundle/install cache contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache filenames match between bundle.sh and 03-install-tools.sh
+        run: |
+          # These are the 16 expected cache file basenames
+          FILES="starship.tar.gz zoxide.tar.gz fzf.tar.gz bat.tar.gz eza.tar.gz \
+                 ripgrep.tar.gz fd.tar.gz yazi.zip lazygit.tar.gz uv.tar.gz \
+                 glab.tar.gz jf delta.tar.gz nvim.appimage helm.tar.gz oc.tar.gz"
+          FAIL=0
+          for f in $FILES; do
+            grep -q "\"$f\"" airgap/bundle.sh || { echo "FAIL: bundle.sh missing $f"; FAIL=1; }
+          done
+          # Verify plugin tarballs too
+          for p in zinit.tar.gz fast-syntax-highlighting.tar.gz zsh-autosuggestions.tar.gz \
+                   zsh-completions.tar.gz fzf-tab.tar.gz; do
+            grep -q "\"$p\"" airgap/bundle.sh || { echo "FAIL: bundle.sh missing plugin $p"; FAIL=1; }
+          done
+          exit $FAIL
+
+  zshrc-guards:
+    name: Zsh tool guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check command guards in .zshrc
+        run: |
+          for tool in starship zoxide fzf bat; do
+            grep -q "command -v $tool" zsh/.zshrc \
+              || { echo "FAIL: .zshrc missing guard for $tool"; exit 1; }
+          done
+          echo "OK: .zshrc has command guards for tool integrations"
+
+  # ── Medium checks (need Fedora container) ─────────────────────────
+  stow-dry-run:
+    name: Stow dry-run (Fedora 43)
+    runs-on: ubuntu-latest
+    container:
+      image: registry.fedoraproject.org/fedora:43
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install stow
+        run: dnf install -y stow
+      - name: Create test user
+        run: useradd --create-home testuser
+      - name: Stow --simulate all packages
+        run: |
+          FAIL=0
+          for pkg in zsh starship nvim tmux yazi git podman opencode codex; do
+            if stow --dir="$(pwd)" --target="/home/testuser" --simulate --restow "$pkg" 2>&1; then
+              echo "  OK: $pkg"
+            else
+              echo "  FAIL: $pkg"
+              FAIL=1
+            fi
+          done
+          exit $FAIL
