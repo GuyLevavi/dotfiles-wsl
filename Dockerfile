@@ -20,6 +20,11 @@
 ARG BASE_IMAGE=registry.fedoraproject.org/fedora:43
 FROM ${BASE_IMAGE}
 
+# Use bash for all RUN commands — bash is pre-installed on all supported base
+# images (Fedora 43, UBI 9, Ubuntu 24.04). The default /bin/sh on Ubuntu is
+# dash, which lacks 'source' and bash-specific syntax used below.
+SHELL ["/bin/bash", "-c"]
+
 # ── System packages ──────────────────────────────────────────────────────────
 # Detects the distro from /etc/os-release and uses the appropriate package
 # manager. Package lists are kept in sync with 02-install-packages.sh.
