@@ -44,12 +44,7 @@ RUN source /etc/os-release && \
             2>/dev/null \
           || dnf install -y epel-release 2>/dev/null \
           || true && \
-          dnf config-manager \
-            --set-enabled "ubi-${VER}-appstream-rpms" \
-            "ubi-${VER}-baseos-rpms" \
-            "ubi-${VER}-codeready-builder-rpms" \
-            crb powertools \
-            2>/dev/null || true && \
+          /usr/bin/crb enable 2>/dev/null || true && \
           dnf makecache; \
         fi && \
         dnf install -y \
