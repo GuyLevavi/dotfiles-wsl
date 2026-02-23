@@ -41,13 +41,11 @@ RUN source /etc/os-release && \
           VER="${VERSION_ID%%.*}" && \
           dnf install -y \
             "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${VER}.noarch.rpm" \
-            2>/dev/null \
-          || dnf install -y epel-release 2>/dev/null \
-          || true && \
-          /usr/bin/crb enable 2>/dev/null || true && \
+          || dnf install -y epel-release || true && \
+          /usr/bin/crb enable || true && \
           dnf makecache; \
         fi && \
-        dnf install -y \
+        dnf install -y --enablerepo=epel \
           curl wget unzip tar gzip bzip2 xz which file tree htop procps-ng \
           zsh tmux stow git git-lfs gawk \
           nodejs npm \
