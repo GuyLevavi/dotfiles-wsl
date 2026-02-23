@@ -128,18 +128,31 @@ fi
 # ===== Step 2: System packages =====
 log "Step 2/5: System packages"
 if [[ "$(id -u)" -eq 0 && -f "$REPO_ROOT/bootstrap/02-install-packages.sh" ]]; then
-    if curl -s --max-time 3 https://fedoraproject.org >/dev/null 2>&1; then
-        # Online: install via DNF repos
-        bash "$REPO_ROOT/bootstrap/02-install-packages.sh" --minimal 2>&1 || warn "DNF failed"
-    elif [[ -d "$CACHE/rpms" ]] && ls "$CACHE/rpms/"*.rpm &>/dev/null; then
-        # Offline: install from cached RPMs
-        log "Installing system packages from cached RPMs..."
-        bash "$REPO_ROOT/bootstrap/02-install-packages.sh" --offline "$CACHE/rpms" 2>&1 || warn "RPM install failed"
+    # Detect host distro to know which package manager and cache dir to use
+    _distro_id=""
+    [[ -f /etc/os-release ]] && _distro_id="$(. /etc/os-release; echo "${ID:-}")"
+    case "${_distro_id}" in
+        ubuntu|debian) _pkg_mgr=apt; _cache_subdir=debs; _ext=deb ;;
+        *)             _pkg_mgr=dnf; _cache_subdir=rpms; _ext=rpm ;;
+    esac
+
+    if curl -s --max-time 3 https://fedoraproject.org >/dev/null 2>&1 \
+       || curl -s --max-time 3 https://ubuntu.com >/dev/null 2>&1; then
+        # Online: install via native package manager
+        bash "$REPO_ROOT/bootstrap/02-install-packages.sh" --minimal 2>&1 \
+            || warn "${_pkg_mgr} install failed"
+    elif [[ -d "$CACHE/${_cache_subdir}" ]] \
+         && ls "$CACHE/${_cache_subdir}/"*."${_ext}" &>/dev/null; then
+        # Offline: install from cached packages
+        log "Installing system packages from cached ${_ext^^}s..."
+        bash "$REPO_ROOT/bootstrap/02-install-packages.sh" \
+            --offline "$CACHE/${_cache_subdir}" 2>&1 \
+            || warn "${_ext^^} install failed"
         ok "System packages installed from cache"
     else
-        warn "Network unavailable and no cached RPMs found in $CACHE/rpms/"
+        warn "Network unavailable and no cached ${_ext^^}s found in $CACHE/${_cache_subdir}/"
         warn "System packages (stow, zsh, podman, etc.) will be MISSING."
-        warn "Re-run bundle.sh on a Fedora/RHEL host to include RPMs."
+        warn "Re-run bundle.sh on a ${_pkg_mgr} host to include system packages."
     fi
 else
     warn "Skipping system packages (not root or script missing)"

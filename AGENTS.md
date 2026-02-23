@@ -36,7 +36,7 @@ Six scripts in `bootstrap/`, run in order:
 |--------|---------|---------|
 | `00-install-fedora-wsl.ps1` | Windows/PowerShell | Installs Fedora 43 WSL |
 | `01-create-user.sh` | root | Creates user `gl` with wheel group |
-| `02-install-packages.sh` | root | DNF packages (`--minimal` skips build deps) |
+| `02-install-packages.sh` | root | DNF or APT packages (`--minimal` skips build deps) |
 | `03-install-tools.sh` | user | Downloads/installs 18 CLI tools to `~/.local/bin` |
 | `04-stow-dotfiles.sh` | user | Stow all packages, backs up conflicts |
 | `05-setup-shell.sh` | root | Sets zsh as default shell |
@@ -47,7 +47,8 @@ Three components:
 
 1. **`airgap/bundle.sh`** — Downloads tool binaries + zsh plugins into
    `airgap/cache/`, creates `devenv-bundle-YYYYMMDD.tar.gz`. Uses
-   `versions.lock` to pin versions.
+   `versions.lock` to pin versions. Also downloads system packages:
+   `cache/rpms/` on Fedora/RHEL, `cache/debs/` on Ubuntu/Debian.
 
 2. **`airgap/deploy.sh`** — Extracts bundle, derives repo location from its
    own `BASH_SOURCE`, symlinks extracted cache into repo, runs bootstrap
@@ -66,6 +67,37 @@ Three components:
 - **Terminal**: WezTerm (Windows-side, NOT symlinked via stow)
 - **Theme**: Tokyo Night everywhere
 - **Font**: JetBrainsMono Nerd Font
+
+## Multi-Distro Docker Support
+
+The `Dockerfile` supports three base images via `ARG BASE_IMAGE`:
+
+| Variant | Base image | Tag suffix |
+|---------|-----------|-----------|
+| Fedora 43 (default) | `registry.fedoraproject.org/fedora:43` | *(none)* / `:latest` |
+| RHEL/UBI 9 | `registry.access.redhat.com/ubi9/ubi:latest` | `-ubi9` |
+| Ubuntu 24.04 | `ubuntu:24.04` | `-ubuntu2404` |
+
+The Dockerfile detects distro at build time via `/etc/os-release` and runs the
+appropriate package manager. `02-install-packages.sh` does the same at runtime.
+
+### Package Name Differences
+
+| Package purpose | Fedora/RHEL name | Ubuntu/Debian name |
+|----------------|-----------------|-------------------|
+| Python headers | `python3-devel` | `python3-dev` |
+| ShellCheck | `ShellCheck` | `shellcheck` |
+| Process utils | `procps-ng` | `procps` |
+| XZ utils | `xz` | `xz-utils` |
+
+### Airgap Bundle per Distro
+
+`bundle.sh` auto-detects the host distro:
+- On Fedora/RHEL: downloads RPMs into `cache/rpms/` via `dnf download --resolve`
+- On Ubuntu/Debian: downloads DEBs into `cache/debs/` via `apt-get install --download-only`
+
+`deploy.sh` detects the target distro at runtime and passes the right cache dir
+to `02-install-packages.sh --offline`.
 
 ## Critical Conventions
 
