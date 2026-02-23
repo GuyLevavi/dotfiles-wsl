@@ -75,16 +75,22 @@ RUN source /etc/os-release && \
     esac
 
 # ── Create dev user ──────────────────────────────────────────────────────────
-# Detect sudo group name (wheel on RHEL-family, sudo on Ubuntu/Debian)
+# Detect sudo group name (wheel on RHEL-family, sudo on Ubuntu/Debian).
+# UBI 9 minimal may lack sudo and /etc/sudoers.d — install sudo and mkdir.
 RUN source /etc/os-release && \
     case "${ID:-}" in \
       ubuntu|debian) SUDO_GROUP=sudo ;; \
       *)             SUDO_GROUP=wheel ;; \
     esac && \
-    # Create wheel group if it doesn't exist (RHEL/UBI may not have it) \
+    # Ensure sudo is installed (UBI 9 minimal omits it) \
+    command -v sudo >/dev/null 2>&1 || { \
+      dnf install -y sudo 2>/dev/null || apt-get install -y sudo 2>/dev/null || true; \
+    } && \
+    mkdir -p /etc/sudoers.d && \
+    # Create wheel group if it doesn't exist (UBI may not have it) \
     getent group wheel >/dev/null 2>&1 || groupadd wheel && \
     # Create user with zsh shell \
-    (command -v zsh >/dev/null 2>&1 && ZSH_PATH=$(command -v zsh) || ZSH_PATH=/usr/bin/zsh) && \
+    ZSH_PATH="$(command -v zsh 2>/dev/null || echo /usr/bin/zsh)" && \
     useradd --create-home --shell "$ZSH_PATH" gl && \
     usermod --append --groups "$SUDO_GROUP" gl && \
     echo "%${SUDO_GROUP} ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/sudo-nopasswd && \
