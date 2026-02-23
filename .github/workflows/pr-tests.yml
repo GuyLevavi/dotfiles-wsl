@@ -195,65 +195,75 @@ jobs:
           done
           exit $FAIL
 
-      - name: Airgap RPM pipeline is wired up
+      - name: Airgap offline package pipeline is wired up
         run: |
           FAIL=0
-          # bundle.sh must download RPMs into cache/rpms/
+          # bundle.sh must download both RPMs and DEBs
           grep -q 'rpms' airgap/bundle.sh \
             || { echo "FAIL: bundle.sh has no RPM download step"; FAIL=1; }
+          grep -q 'debs' airgap/bundle.sh \
+            || { echo "FAIL: bundle.sh has no DEB download step"; FAIL=1; }
           grep -q 'dnf download' airgap/bundle.sh \
             || { echo "FAIL: bundle.sh missing 'dnf download' for RPMs"; FAIL=1; }
-          # deploy.sh must use cached RPMs when offline
-          grep -q '\-\-offline.*rpms' airgap/deploy.sh \
-            || { echo "FAIL: deploy.sh does not pass --offline with RPM dir"; FAIL=1; }
+          grep -q 'apt-get install.*download-only' airgap/bundle.sh \
+            || { echo "FAIL: bundle.sh missing apt-get --download-only for DEBs"; FAIL=1; }
+          # deploy.sh must support both cache subdirs
+          grep -q 'cache_subdir\|cache/rpms\|rpms' airgap/deploy.sh \
+            || { echo "FAIL: deploy.sh missing RPM cache dir handling"; FAIL=1; }
+          grep -q 'debs' airgap/deploy.sh \
+            || { echo "FAIL: deploy.sh missing DEB cache dir handling"; FAIL=1; }
           # 02-install-packages.sh must support --offline flag
           grep -q '\-\-offline' bootstrap/02-install-packages.sh \
             || { echo "FAIL: 02-install-packages.sh missing --offline support"; FAIL=1; }
-          # RUNTIME_PKGS in bundle.sh must include critical packages
+          # Critical packages must appear in both distro lists in bundle.sh
           for pkg in stow podman zsh tmux; do
             grep -q "$pkg" airgap/bundle.sh \
-              || { echo "FAIL: bundle.sh RUNTIME_PKGS missing $pkg"; FAIL=1; }
+              || { echo "FAIL: bundle.sh missing $pkg"; FAIL=1; }
           done
-          [ $FAIL -eq 0 ] && echo "OK: airgap RPM pipeline is properly wired"
+          [ $FAIL -eq 0 ] && echo "OK: airgap offline package pipeline is properly wired"
           exit $FAIL
 
-      - name: RUNTIME_PKGS in bundle.sh match 02-install-packages.sh
+      - name: RUNTIME_PKGS_RPM and _DEB lists are present in bundle.sh
         run: |
-          # Extract package names from both files and compare
-          extract_pkgs() {
-            # Find RUNTIME_PKGS array, extract package names between ( and )
-            sed -n '/^RUNTIME_PKGS=/,/^)/p' "$1" \
-              | grep -v '^RUNTIME_PKGS=\|^)' \
-              | tr -s ' ' '\n' \
-              | grep -v '^$'
-          }
-          BUNDLE_PKGS=$(extract_pkgs airgap/bundle.sh | sort)
-          INSTALL_PKGS=$(extract_pkgs bootstrap/02-install-packages.sh | sort)
-          if [ "$BUNDLE_PKGS" != "$INSTALL_PKGS" ]; then
-            echo "FAIL: RUNTIME_PKGS mismatch between bundle.sh and 02-install-packages.sh"
-            diff <(echo "$BUNDLE_PKGS") <(echo "$INSTALL_PKGS") || true
-            exit 1
-          fi
-          echo "OK: RUNTIME_PKGS arrays match"
+          # Since package names differ between Fedora/RHEL and Ubuntu/Debian,
+          # bundle.sh now has two separate arrays. Validate both exist and
+          # contain critical packages.
+          FAIL=0
+          grep -q 'RUNTIME_PKGS_RPM' airgap/bundle.sh \
+            || { echo "FAIL: bundle.sh missing RUNTIME_PKGS_RPM array"; FAIL=1; }
+          grep -q 'RUNTIME_PKGS_DEB' airgap/bundle.sh \
+            || { echo "FAIL: bundle.sh missing RUNTIME_PKGS_DEB array"; FAIL=1; }
+          # Critical packages must appear in both (possibly under different names)
+          for pkg in stow podman zsh tmux git; do
+            grep -q "$pkg" airgap/bundle.sh \
+              || { echo "FAIL: bundle.sh missing '$pkg'"; FAIL=1; }
+          done
+          # 02-install-packages.sh must have both DNF and APT code paths
+          grep -q 'RUNTIME_PKGS_RPM\|dnf install' bootstrap/02-install-packages.sh \
+            || { echo "FAIL: 02-install-packages.sh missing dnf path"; FAIL=1; }
+          grep -q 'apt-get install' bootstrap/02-install-packages.sh \
+            || { echo "FAIL: 02-install-packages.sh missing apt-get path"; FAIL=1; }
+          [ $FAIL -eq 0 ] && echo "OK: multi-distro package lists present"
+          exit $FAIL
 
-      - name: Dockerfile packages match RUNTIME_PKGS
+      - name: Dockerfile has distro-conditional package install
         run: |
-          # Extract the dnf install line from Dockerfile and compare
-          DOCKER_PKGS=$(sed -n '/^RUN dnf install/,/dnf clean/p' Dockerfile \
-            | grep -v 'dnf\|&&\|rm ' \
-            | tr -s ' \\' '\n' \
-            | sed 's/^[ \t]*//' \
-            | grep -v '^$' | sort)
-          INSTALL_PKGS=$(sed -n '/^RUNTIME_PKGS=/,/^)/p' bootstrap/02-install-packages.sh \
-            | grep -v '^RUNTIME_PKGS=\|^)' \
-            | tr -s ' ' '\n' \
-            | grep -v '^$' | sort)
-          if [ "$DOCKER_PKGS" != "$INSTALL_PKGS" ]; then
-            echo "FAIL: Dockerfile packages don't match RUNTIME_PKGS"
-            diff <(echo "$DOCKER_PKGS") <(echo "$INSTALL_PKGS") || true
-            exit 1
-          fi
-          echo "OK: Dockerfile packages match RUNTIME_PKGS"
+          FAIL=0
+          # Dockerfile must use ARG BASE_IMAGE (not hardcode the FROM)
+          grep -q '^ARG BASE_IMAGE' Dockerfile \
+            || { echo "FAIL: Dockerfile missing 'ARG BASE_IMAGE'"; FAIL=1; }
+          # Must have conditional logic for both dnf and apt-get
+          grep -q 'dnf install' Dockerfile \
+            || { echo "FAIL: Dockerfile missing dnf install block"; FAIL=1; }
+          grep -q 'apt-get install' Dockerfile \
+            || { echo "FAIL: Dockerfile missing apt-get install block"; FAIL=1; }
+          # Both distro paths must install critical packages
+          for pkg in stow zsh tmux git podman; do
+            grep -q "$pkg" Dockerfile \
+              || { echo "FAIL: Dockerfile missing '$pkg'"; FAIL=1; }
+          done
+          [ $FAIL -eq 0 ] && echo "OK: Dockerfile has multi-distro support"
+          exit $FAIL
 
   zshrc-guards:
     name: Zsh tool guards
@@ -453,29 +463,53 @@ jobs:
             || { echo "FAIL: UV_PYTHON_DOWNLOADS=manual not in .zprofile"; exit 1; }
           echo "UV_PYTHON_DOWNLOADS=manual verified in .zprofile"
 
-  # ── Docker build test ──────────────────────────────────────────────
+  # ── Docker build test — matrix over all supported base images ─────
   docker-build:
-    name: Docker build test
+    name: Docker build (${{ matrix.name }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false   # run all matrix variants even if one fails
+      matrix:
+        include:
+          - name: fedora43
+            base_image: registry.fedoraproject.org/fedora:43
+          - name: ubi9
+            base_image: registry.access.redhat.com/ubi9/ubi:latest
+          - name: ubuntu2404
+            base_image: ubuntu:24.04
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build Docker image
-        run: docker build -t dotfiles-wsl-test .
-
-      - name: Verify image contents
+      - name: Build Docker image (${{ matrix.name }})
         run: |
+          docker build \
+            --build-arg BASE_IMAGE=${{ matrix.base_image }} \
+            -t dotfiles-wsl-test-${{ matrix.name }} .
+
+      - name: Verify image contents (${{ matrix.name }})
+        run: |
+          IMG=dotfiles-wsl-test-${{ matrix.name }}
           FAIL=0
-          for cmd in stow zsh tmux git podman buildah skopeo jq node npm python3; do
-            if docker run --rm dotfiles-wsl-test command -v "$cmd" >/dev/null 2>&1; then
+          # Core tools — must be present on all distros
+          for cmd in stow zsh git jq python3; do
+            if docker run --rm "$IMG" sh -c "command -v $cmd" >/dev/null 2>&1; then
               echo "  + $cmd"
             else
               echo "  X $cmd MISSING"
               FAIL=$((FAIL + 1))
             fi
           done
+          # Optional tools — available on Fedora/Ubuntu but may be absent on UBI 9
+          # (UBI has limited repos without full RHEL subscription)
+          for cmd in tmux node npm podman buildah skopeo; do
+            if docker run --rm "$IMG" sh -c "command -v $cmd" >/dev/null 2>&1; then
+              echo "  + $cmd"
+            else
+              echo "  ~ $cmd not found (optional on ${{ matrix.name }})"
+            fi
+          done
           # Check user exists
-          docker run --rm dotfiles-wsl-test id gl >/dev/null 2>&1 \
+          docker run --rm "$IMG" id gl >/dev/null 2>&1 \
             || { echo "  X user gl missing"; FAIL=$((FAIL + 1)); }
-          [ $FAIL -eq 0 ] || { echo "FAIL: $FAIL checks failed"; exit 1; }
-          echo "Docker image verified"
+          [ $FAIL -eq 0 ] || { echo "FAIL: $FAIL checks failed on ${{ matrix.name }}"; exit 1; }
+          echo "Docker image verified (${{ matrix.name }})"

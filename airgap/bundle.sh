@@ -73,13 +73,26 @@ download "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable-${OC_
 download "https://github.com/fastfetch-cli/fastfetch/releases/download/${FASTFETCH_VERSION}/fastfetch-linux-amd64.tar.gz" fastfetch.tar.gz
 download "https://dl.min.io/client/mc/release/linux-amd64/archive/mc.${MC_VERSION}" mc
 
-# ===== System RPM packages =====
-# Download RUNTIME_PKGS from 02-install-packages.sh so they can be installed
-# offline via `dnf localinstall`. Requires running on a Fedora/RHEL host.
+# ===== System packages (RPMs or DEBs depending on host distro) =====
+# Download RUNTIME_PKGS so they can be installed offline.
+# Must be run on the target distro family (Fedora/RHEL for RPMs, Ubuntu/Debian for DEBs).
 echo ""
-log "System RPM packages"
-RPM_DIR="${CACHE}/rpms"
-RUNTIME_PKGS=(
+log "System packages"
+
+# Detect host distro
+source /etc/os-release 2>/dev/null || true
+case "${ID:-}" in
+    ubuntu|debian) HOST_PKG_MGR=apt ;;
+    fedora|rhel|centos|almalinux|rocky) HOST_PKG_MGR=dnf ;;
+    *)
+        if command -v dnf &>/dev/null; then HOST_PKG_MGR=dnf
+        elif command -v apt-get &>/dev/null; then HOST_PKG_MGR=apt
+        else HOST_PKG_MGR=unknown
+        fi ;;
+esac
+
+# RPM packages (Fedora/RHEL names)
+RUNTIME_PKGS_RPM=(
     curl wget unzip tar gzip bzip2 xz which file tree htop procps-ng
     zsh tmux stow git git-lfs gawk
     nodejs npm
@@ -87,24 +100,63 @@ RUNTIME_PKGS=(
     python3-devel python3-pip
     jq ShellCheck
 )
-if $DRY_RUN; then
-    if [[ -d "$RPM_DIR" && "$(ls -A "$RPM_DIR" 2>/dev/null)" ]]; then
-        skip "rpms/ ($(ls "$RPM_DIR"/*.rpm 2>/dev/null | wc -l) RPMs cached)"
+
+# DEB packages (Ubuntu/Debian name equivalents)
+RUNTIME_PKGS_DEB=(
+    curl wget unzip tar gzip bzip2 xz-utils file tree htop procps
+    zsh tmux stow git git-lfs gawk
+    nodejs npm
+    podman buildah skopeo fuse-overlayfs
+    python3-dev python3-pip
+    jq shellcheck
+)
+
+if [[ "$HOST_PKG_MGR" == "dnf" ]]; then
+    RPM_DIR="${CACHE}/rpms"
+    if $DRY_RUN; then
+        if [[ -d "$RPM_DIR" && "$(ls -A "$RPM_DIR" 2>/dev/null)" ]]; then
+            skip "rpms/ ($(ls "$RPM_DIR"/*.rpm 2>/dev/null | wc -l) RPMs cached)"
+        else
+            echo "  ~ [dry] rpms/ (${#RUNTIME_PKGS_RPM[@]} packages to download)"
+        fi
     else
-        echo "  ~ [dry] rpms/ (${#RUNTIME_PKGS[@]} packages to download)"
+        if [[ -d "$RPM_DIR" && "$(ls -A "$RPM_DIR" 2>/dev/null)" ]]; then
+            skip "rpms/ ($(ls "$RPM_DIR"/*.rpm 2>/dev/null | wc -l) RPMs)"
+        else
+            mkdir -p "$RPM_DIR"
+            echo "  Downloading RPMs (this may take a minute)..."
+            dnf download --resolve --alldeps --destdir="$RPM_DIR" "${RUNTIME_PKGS_RPM[@]}" 2>&1 \
+                | tail -1
+            ok "rpms/ ($(ls "$RPM_DIR"/*.rpm 2>/dev/null | wc -l) RPMs)"
+        fi
     fi
-elif command -v dnf &>/dev/null; then
-    if [[ -d "$RPM_DIR" && "$(ls -A "$RPM_DIR" 2>/dev/null)" ]]; then
-        skip "rpms/ ($(ls "$RPM_DIR"/*.rpm 2>/dev/null | wc -l) RPMs)"
+
+elif [[ "$HOST_PKG_MGR" == "apt" ]]; then
+    DEB_DIR="${CACHE}/debs"
+    if $DRY_RUN; then
+        if [[ -d "$DEB_DIR" && "$(ls -A "$DEB_DIR" 2>/dev/null)" ]]; then
+            skip "debs/ ($(ls "$DEB_DIR"/*.deb 2>/dev/null | wc -l) DEBs cached)"
+        else
+            echo "  ~ [dry] debs/ (${#RUNTIME_PKGS_DEB[@]} packages to download)"
+        fi
     else
-        mkdir -p "$RPM_DIR"
-        echo "  Downloading RPMs (this may take a minute)..."
-        dnf download --resolve --alldeps --destdir="$RPM_DIR" "${RUNTIME_PKGS[@]}" 2>&1 \
-            | tail -1
-        ok "rpms/ ($(ls "$RPM_DIR"/*.rpm 2>/dev/null | wc -l) RPMs)"
+        if [[ -d "$DEB_DIR" && "$(ls -A "$DEB_DIR" 2>/dev/null)" ]]; then
+            skip "debs/ ($(ls "$DEB_DIR"/*.deb 2>/dev/null | wc -l) DEBs)"
+        else
+            mkdir -p "$DEB_DIR"
+            echo "  Downloading DEBs (this may take a minute)..."
+            apt-get update -qq 2>&1 | tail -1 || true
+            # apt-get download doesn't resolve deps; use apt-rdepends or just install with --download-only
+            apt-get install --download-only -y --reinstall "${RUNTIME_PKGS_DEB[@]}" 2>&1 | tail -1 || true
+            # apt caches to /var/cache/apt/archives — copy to our DEB_DIR
+            find /var/cache/apt/archives -name '*.deb' -exec cp {} "$DEB_DIR/" \;
+            ok "debs/ ($(ls "$DEB_DIR"/*.deb 2>/dev/null | wc -l) DEBs)"
+        fi
     fi
+
 else
-    warn "dnf not found — skipping RPM download (bundle must be created on Fedora/RHEL)"
+    warn "No supported package manager found — skipping system package download"
+    warn "Bundle must be created on a Fedora/RHEL or Ubuntu/Debian host"
 fi
 
 # ===== Zsh plugins =====
