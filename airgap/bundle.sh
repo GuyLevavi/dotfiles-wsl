@@ -70,6 +70,8 @@ download "https://github.com/dandavison/delta/releases/download/${DELTA_VERSION}
 download "https://github.com/neovim/neovim/releases/download/v${NEOVIM_VERSION}/nvim-linux-x86_64.appimage" nvim.appimage
 download "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" helm.tar.gz
 download "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable-${OC_VERSION}/openshift-client-linux.tar.gz" oc.tar.gz
+download "https://github.com/fastfetch-cli/fastfetch/releases/download/${FASTFETCH_VERSION}/fastfetch-linux-amd64.tar.gz" fastfetch.tar.gz
+download "https://dl.min.io/client/mc/release/linux-amd64/archive/mc.${MC_VERSION}" mc
 
 # ===== System RPM packages =====
 # Download RUNTIME_PKGS from 02-install-packages.sh so they can be installed
@@ -144,6 +146,8 @@ delta           ${DELTA_VERSION}
 neovim          ${NEOVIM_VERSION}
 helm            ${HELM_VERSION}
 oc              ${OC_VERSION}
+fastfetch       ${FASTFETCH_VERSION}
+mc              ${MC_VERSION}
 marimo          ${MARIMO_VERSION}
 EOF
     ok "versions.lock"

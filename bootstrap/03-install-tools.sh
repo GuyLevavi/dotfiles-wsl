@@ -70,6 +70,8 @@ resolve_versions() {
     JFROG_CLI_VERSION="${JFROG_CLI_VERSION:-2.72.2}"  # no GitHub releases page
     HELM_VERSION="${HELM_VERSION:-$(gh_latest helm/helm)}"
     OC_VERSION="${OC_VERSION:-4.17}"                  # uses stable-X.Y channel, not a tag
+    FASTFETCH_VERSION="${FASTFETCH_VERSION:-$(gh_latest fastfetch-cli/fastfetch)}"
+    MC_VERSION="${MC_VERSION:-$(gh_latest minio/mc)}"  # date-based: RELEASE.YYYY-MM-DDT...
     MARIMO_VERSION="${MARIMO_VERSION:-}"               # empty = latest via uv
 }
 
@@ -132,7 +134,7 @@ gh_tool() {
 # ===== Print resolved versions =====
 echo ""
 echo "Versions:"
-for v in STARSHIP ZOXIDE FZF BAT EZA RIPGREP FD YAZI LAZYGIT DELTA NEOVIM UV GLAB JFROG_CLI HELM OC; do
+for v in STARSHIP ZOXIDE FZF BAT EZA RIPGREP FD YAZI LAZYGIT DELTA NEOVIM UV GLAB JFROG_CLI HELM OC FASTFETCH MC; do
     var="${v}_VERSION"
     printf "  %-14s %s\n" "$v" "${!var}"
 done
@@ -203,10 +205,12 @@ install -m 0755 "${TMP}/jf" "${BIN}/jf"
 echo "==> neovim ${NEOVIM_VERSION}"
 fetch "${TMP}/nvim.appimage" "https://github.com/neovim/neovim/releases/download/v${NEOVIM_VERSION}/nvim-linux-x86_64.appimage"
 cp "${TMP}/nvim.appimage" "${BIN}/nvim.appimage" && chmod +x "${BIN}/nvim.appimage"
-cat > "${BIN}/nvim" << 'EOF'
+cat > "${BIN}/nvim" << 'WRAPPER'
 #!/usr/bin/env bash
-exec "${HOME}/.local/bin/nvim.appimage" --appimage-extract-and-run "$@"
-EOF
+# Resolve the directory this wrapper lives in (works even through symlinks)
+NVIM_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+exec "${NVIM_DIR}/nvim.appimage" --appimage-extract-and-run "$@"
+WRAPPER
 chmod +x "${BIN}/nvim"
 
 # oc — OpenShift CLI (also bundles kubectl)
@@ -215,6 +219,20 @@ fetch "${TMP}/oc.tar.gz" "https://mirror.openshift.com/pub/openshift-v4/clients/
 mkdir -p "${TMP}/oc" && tar -xzf "${TMP}/oc.tar.gz" -C "${TMP}/oc"
 install -m 0755 "${TMP}/oc/oc" "${BIN}/oc"
 [[ -f "${TMP}/oc/kubectl" ]] && install -m 0755 "${TMP}/oc/kubectl" "${BIN}/kubectl"
+
+# fastfetch — system info tool
+# Tarball contains fastfetch-linux-amd64/usr/bin/fastfetch AND a directory
+# fastfetch-linux-amd64/usr/share/fastfetch/ — using --strip-components=3
+# on the full archive causes a name collision. Extract just the binary.
+echo "==> fastfetch ${FASTFETCH_VERSION}"
+fetch "${TMP}/fastfetch.tar.gz" "https://github.com/fastfetch-cli/fastfetch/releases/download/${FASTFETCH_VERSION}/fastfetch-linux-amd64.tar.gz"
+tar -xzf "${TMP}/fastfetch.tar.gz" -C "${TMP}" --strip-components=3 --wildcards "*/usr/bin/fastfetch"
+install -m 0755 "${TMP}/fastfetch" "${BIN}/fastfetch"
+
+# mc — MinIO Client for S3-compatible storage
+echo "==> mc ${MC_VERSION}"
+fetch "${TMP}/mc" "https://dl.min.io/client/mc/release/linux-amd64/archive/mc.${MC_VERSION}"
+install -m 0755 "${TMP}/mc" "${BIN}/mc"
 
 # uv — fast Python package manager
 echo "==> uv ${UV_VERSION}"
