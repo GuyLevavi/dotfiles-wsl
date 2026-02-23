@@ -37,7 +37,7 @@ Six scripts in `bootstrap/`, run in order:
 | `00-install-fedora-wsl.ps1` | Windows/PowerShell | Installs Fedora 43 WSL |
 | `01-create-user.sh` | root | Creates user `gl` with wheel group |
 | `02-install-packages.sh` | root | DNF packages (`--minimal` skips build deps) |
-| `03-install-tools.sh` | user | Downloads/installs 17 CLI tools to `~/.local/bin` |
+| `03-install-tools.sh` | user | Downloads/installs 18 CLI tools to `~/.local/bin` |
 | `04-stow-dotfiles.sh` | user | Stow all packages, backs up conflicts |
 | `05-setup-shell.sh` | root | Sets zsh as default shell |
 
@@ -54,8 +54,8 @@ Three components:
    scripts 02-05 with `--offline` flag.
 
 3. **`test-offline.ps1`** — End-to-end test: exports WSL, imports clone,
-    blocks network via nftables, deploys bundle, verifies 26 checks
-    (17 tools + 9 configs).
+    blocks network via nftables, deploys bundle, verifies 27 checks
+    (18 tools + 9 configs).
 
 ## Environment
 
@@ -96,7 +96,7 @@ minimal and commented so a vim beginner can understand them.
 starship.tar.gz, zoxide.tar.gz, fzf.tar.gz, bat.tar.gz, eza.tar.gz,
 ripgrep.tar.gz, fd.tar.gz, yazi.zip, lazygit.tar.gz, uv.tar.gz,
 glab.tar.gz, jf, delta.tar.gz, nvim.appimage, helm.tar.gz, oc.tar.gz,
-fastfetch.tar.gz
+fastfetch.tar.gz, mc
 ```
 
 ### GitLab API for glab

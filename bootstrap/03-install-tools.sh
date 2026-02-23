@@ -71,6 +71,7 @@ resolve_versions() {
     HELM_VERSION="${HELM_VERSION:-$(gh_latest helm/helm)}"
     OC_VERSION="${OC_VERSION:-4.17}"                  # uses stable-X.Y channel, not a tag
     FASTFETCH_VERSION="${FASTFETCH_VERSION:-$(gh_latest fastfetch-cli/fastfetch)}"
+    MC_VERSION="${MC_VERSION:-$(gh_latest minio/mc)}"  # date-based: RELEASE.YYYY-MM-DDT...
     MARIMO_VERSION="${MARIMO_VERSION:-}"               # empty = latest via uv
 }
 
@@ -133,7 +134,7 @@ gh_tool() {
 # ===== Print resolved versions =====
 echo ""
 echo "Versions:"
-for v in STARSHIP ZOXIDE FZF BAT EZA RIPGREP FD YAZI LAZYGIT DELTA NEOVIM UV GLAB JFROG_CLI HELM OC FASTFETCH; do
+for v in STARSHIP ZOXIDE FZF BAT EZA RIPGREP FD YAZI LAZYGIT DELTA NEOVIM UV GLAB JFROG_CLI HELM OC FASTFETCH MC; do
     var="${v}_VERSION"
     printf "  %-14s %s\n" "$v" "${!var}"
 done
@@ -222,6 +223,11 @@ echo "==> fastfetch ${FASTFETCH_VERSION}"
 fetch "${TMP}/fastfetch.tar.gz" "https://github.com/fastfetch-cli/fastfetch/releases/download/${FASTFETCH_VERSION}/fastfetch-linux-amd64.tar.gz"
 mkdir -p "${TMP}/fastfetch" && tar -xzf "${TMP}/fastfetch.tar.gz" -C "${TMP}/fastfetch" --strip-components=3
 install -m 0755 "${TMP}/fastfetch/fastfetch" "${BIN}/fastfetch"
+
+# mc — MinIO Client for S3-compatible storage
+echo "==> mc ${MC_VERSION}"
+fetch "${TMP}/mc" "https://dl.min.io/client/mc/release/linux-amd64/archive/mc.${MC_VERSION}"
+install -m 0755 "${TMP}/mc" "${BIN}/mc"
 
 # uv — fast Python package manager
 echo "==> uv ${UV_VERSION}"

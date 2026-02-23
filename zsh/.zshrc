@@ -217,6 +217,12 @@ alias vim="nvim"
 # System info
 alias ff="fastfetch"
 
+# S3 (MinIO Client)
+alias s3="mc"
+alias s3ls="mc ls"
+alias s3cp="mc cp"
+alias s3cat="mc cat"
+
 # Yazi - cd to directory on exit
 function y() {
     local tmp="$(mktemp -t "yazi-cwd.XXXXXX")"
