@@ -32,15 +32,19 @@ SHELL ["/bin/bash", "-c"]
 RUN source /etc/os-release && \
     case "${ID:-}" in \
       fedora|rhel|centos|almalinux|rocky) \
-        # Enable EPEL on RHEL-family (no-op on Fedora) \
-        # UBI 9 doesn't ship epel-release as a package; install via URL instead. \
+        # Enable EPEL on RHEL-family (no-op on Fedora). \
+        # UBI 9 doesn't ship epel-release in its default repos so install via \
+        # URL; fall back to package name for AlmaLinux/Rocky/CentOS. \
+        # dnf makecache refreshes metadata so the new EPEL repo is visible \
+        # to the package install that follows. \
         if [ "${ID}" != "fedora" ]; then \
           VER="${VERSION_ID%%.*}" && \
           dnf install -y \
             "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${VER}.noarch.rpm" \
             2>/dev/null \
           || dnf install -y epel-release 2>/dev/null \
-          || true; \
+          || true && \
+          dnf makecache; \
         fi && \
         dnf install -y \
           curl wget unzip tar gzip bzip2 xz which file tree htop procps-ng \
