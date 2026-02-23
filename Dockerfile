@@ -43,8 +43,10 @@ RUN source /etc/os-release && \
           /usr/bin/crb enable 2>&1 || true && \
           dnf makecache --quiet; \
         fi && \
-        # Core packages — must succeed \
-        dnf install -y \
+        # Core packages — must succeed. \
+        # --allowerasing lets dnf replace conflicting slim variants (e.g. \
+        # UBI 9 ships curl-minimal which conflicts with the full curl package). \
+        dnf install -y --allowerasing \
           curl wget unzip tar gzip bzip2 xz which file gawk \
           zsh stow git git-lfs \
           podman buildah skopeo fuse-overlayfs \

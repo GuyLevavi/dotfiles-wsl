@@ -468,6 +468,7 @@ jobs:
     name: Docker build (${{ matrix.name }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false   # run all matrix variants even if one fails
       matrix:
         include:
           - name: fedora43
