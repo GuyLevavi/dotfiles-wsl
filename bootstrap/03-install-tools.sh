@@ -219,10 +219,13 @@ install -m 0755 "${TMP}/oc/oc" "${BIN}/oc"
 [[ -f "${TMP}/oc/kubectl" ]] && install -m 0755 "${TMP}/oc/kubectl" "${BIN}/kubectl"
 
 # fastfetch — system info tool
+# Tarball contains fastfetch-linux-amd64/usr/bin/fastfetch AND a directory
+# fastfetch-linux-amd64/usr/share/fastfetch/ — using --strip-components=3
+# on the full archive causes a name collision. Extract just the binary.
 echo "==> fastfetch ${FASTFETCH_VERSION}"
 fetch "${TMP}/fastfetch.tar.gz" "https://github.com/fastfetch-cli/fastfetch/releases/download/${FASTFETCH_VERSION}/fastfetch-linux-amd64.tar.gz"
-mkdir -p "${TMP}/fastfetch" && tar -xzf "${TMP}/fastfetch.tar.gz" -C "${TMP}/fastfetch" --strip-components=3
-install -m 0755 "${TMP}/fastfetch/fastfetch" "${BIN}/fastfetch"
+tar -xzf "${TMP}/fastfetch.tar.gz" -C "${TMP}" --strip-components=3 --wildcards "*/usr/bin/fastfetch"
+install -m 0755 "${TMP}/fastfetch" "${BIN}/fastfetch"
 
 # mc — MinIO Client for S3-compatible storage
 echo "==> mc ${MC_VERSION}"
