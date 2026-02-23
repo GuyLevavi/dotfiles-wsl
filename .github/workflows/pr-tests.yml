@@ -489,7 +489,8 @@ jobs:
         run: |
           IMG=dotfiles-wsl-test-${{ matrix.name }}
           FAIL=0
-          for cmd in stow zsh tmux git jq node npm python3; do
+          # Core tools — must be present on all distros
+          for cmd in stow zsh git jq python3; do
             if docker run --rm "$IMG" sh -c "command -v $cmd" >/dev/null 2>&1; then
               echo "  + $cmd"
             else
@@ -497,13 +498,13 @@ jobs:
               FAIL=$((FAIL + 1))
             fi
           done
-          # podman/buildah/skopeo — available on Fedora/RHEL; optional on Ubuntu
-          # (fuse-overlayfs may not be in Ubuntu universe by default — don't hard-fail)
-          for cmd in podman buildah skopeo; do
+          # Optional tools — available on Fedora/Ubuntu but may be absent on UBI 9
+          # (UBI has limited repos without full RHEL subscription)
+          for cmd in tmux node npm podman buildah skopeo; do
             if docker run --rm "$IMG" sh -c "command -v $cmd" >/dev/null 2>&1; then
               echo "  + $cmd"
             else
-              echo "  ~ $cmd not found (may not be available on ${{ matrix.name }})"
+              echo "  ~ $cmd not found (optional on ${{ matrix.name }})"
             fi
           done
           # Check user exists

@@ -32,28 +32,31 @@ SHELL ["/bin/bash", "-c"]
 RUN source /etc/os-release && \
     case "${ID:-}" in \
       fedora|rhel|centos|almalinux|rocky) \
-        # Enable extra repos on RHEL-family (no-op on Fedora). \
-        # UBI 9: enable the built-in AppStream + CRB repos (tmux, tree, stow \
-        #   live there), then add EPEL for ShellCheck and other extras. \
-        #   EPEL URL install is used because UBI 9 doesn't ship epel-release \
-        #   as a dnf package in its default sparse repos. \
+        # Enable EPEL on RHEL-family (no-op on Fedora, which already has all \
+        # packages in its main repos). EPEL URL install is used because UBI 9 \
+        # doesn't ship epel-release as a dnf package in its default repos. \
         if [ "${ID}" != "fedora" ]; then \
           VER="${VERSION_ID%%.*}" && \
           dnf install -y \
             "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${VER}.noarch.rpm" \
           || dnf install -y epel-release || true && \
-          /usr/bin/crb enable || true && \
-          dnf makecache; \
+          /usr/bin/crb enable 2>&1 || true && \
+          dnf makecache --quiet; \
         fi && \
-        dnf install -y --enablerepo=epel \
-          curl wget unzip tar gzip bzip2 xz which file tree htop procps-ng \
-          zsh tmux stow git git-lfs gawk \
-          nodejs npm \
+        # Core packages — must succeed \
+        dnf install -y \
+          curl wget unzip tar gzip bzip2 xz which file gawk \
+          zsh stow git git-lfs \
           podman buildah skopeo fuse-overlayfs \
           python3-devel python3-pip \
-          jq ShellCheck \
-        && dnf clean all \
-        && rm -rf /var/cache/dnf \
+          jq && \
+        # Optional packages — skip if not available (UBI has limited repos) \
+        dnf install -y procps-ng htop tree tmux nodejs npm ShellCheck \
+          2>/dev/null || \
+        dnf install -y procps-ng htop nodejs npm \
+          2>/dev/null || true && \
+        dnf clean all && \
+        rm -rf /var/cache/dnf \
         ;; \
       ubuntu|debian) \
         export DEBIAN_FRONTEND=noninteractive && \
