@@ -69,6 +69,115 @@ The bundle script downloads all binaries, container images, fonts, and plugin ar
 
 ---
 
+## Docker Images
+
+Pre-built images are published to GHCR for every release. They have all system
+packages pre-installed and are ready to receive the tool binaries via
+`deploy.sh`.
+
+| Base | Image tag |
+|------|-----------|
+| Fedora 43 | `ghcr.io/guylevavi/dotfiles-wsl:latest` |
+| RHEL / UBI 9 | `ghcr.io/guylevavi/dotfiles-wsl:latest-ubi9` |
+| Ubuntu 24.04 | `ghcr.io/guylevavi/dotfiles-wsl:latest-ubuntu2404` |
+
+Pinned release tags follow the same pattern: `v1.3.0`, `v1.3.0-ubi9`,
+`v1.3.0-ubuntu2404`.
+
+### Layering on a corporate base image (Run:ai / Kubernetes)
+
+At work you typically have an approved base image — a corporate PyTorch image,
+an NVIDIA NGC image, or an internal registry image — and you want this dev
+environment on top of it. Use a two-stage `FROM` for that:
+
+```dockerfile
+# Dockerfile.runai
+# Stage 1 — pull the pre-built dev env layer
+FROM ghcr.io/guylevavi/dotfiles-wsl:latest-ubi9 AS devenv
+
+# Stage 2 — your corporate / GPU base image
+FROM registry.your-company.com/ai/pytorch:2.3-cuda12-ubi9
+
+# ── Copy system-level setup from the dev env image ──────────────────────────
+# Recreate the gl user with the same UID so file ownership is consistent
+RUN useradd --create-home --shell /usr/bin/zsh --uid 1000 gl \
+    && mkdir -p /etc/sudoers.d \
+    && echo "%wheel ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/wheel-nopasswd \
+    && chmod 0440 /etc/sudoers.d/wheel-nopasswd \
+    && usermod --append --groups wheel gl
+
+# Copy the pre-installed home directory (dotfiles + CLI tools) from stage 1
+COPY --from=devenv --chown=gl:gl /home/gl /home/gl
+
+# ── Entrypoint ───────────────────────────────────────────────────────────────
+USER gl
+WORKDIR /home/gl
+ENV SHELL=/usr/bin/zsh \
+    PATH="/home/gl/.local/bin:$PATH"
+CMD ["/usr/bin/zsh"]
+```
+
+Build and push to your internal registry:
+
+```bash
+docker build -f Dockerfile.runai \
+  -t registry.your-company.com/your-team/dev-env:latest .
+
+docker push registry.your-company.com/your-team/dev-env:latest
+```
+
+### Running as a Run:ai workload
+
+Submit an interactive session using the image above:
+
+```bash
+runai submit dev-session \
+  --image registry.your-company.com/your-team/dev-env:latest \
+  --interactive \
+  --attach \
+  --gpu 1 \
+  -- zsh
+```
+
+Or via a Run:ai YAML workspace:
+
+```yaml
+# runai-workspace.yaml
+apiVersion: run.ai/v2alpha1
+kind: TrainingWorkload
+metadata:
+  name: dev-session
+spec:
+  gpu:
+    value: "1"
+  image:
+    value: registry.your-company.com/your-team/dev-env:latest
+  command:
+    value: zsh
+  interactive:
+    value: true
+  runAsUser:
+    value: true      # runs as the submitting user (mapped to gl uid 1000)
+```
+
+```bash
+runai apply -f runai-workspace.yaml
+runai bash dev-session   # attach a shell
+```
+
+> **Tip — persistent home directory:** Mount a PVC at `/home/gl` so your
+> editor state, git credentials, and shell history survive pod restarts:
+>
+> ```yaml
+> storage:
+>   pvc:
+>     - claimName: gl-home
+>       path: /home/gl
+>       existingPvc: true
+> ```
+
+---
+
 ## Project Structure
 
 ```
@@ -76,7 +185,7 @@ dotfiles-wsl/
 ├── bootstrap/                  # Setup scripts (run in order)
 │   ├── 00-install-fedora-wsl.ps1   # Install Fedora on WSL2
 │   ├── 01-create-user.sh           # Create non-root user with sudo
-│   ├── 02-install-packages.sh      # System packages (dnf)
+│   ├── 02-install-packages.sh      # System packages (dnf or apt-get)
 │   ├── 03-install-tools.sh         # User-space tools (uv, starship, etc.)
 │   ├── 04-stow-dotfiles.sh         # Symlink configs via GNU Stow
 │   └── 05-setup-shell.sh           # Set zsh as default, install zinit
