@@ -179,10 +179,11 @@ jobs:
 
       - name: Cache filenames match between bundle.sh and 03-install-tools.sh
         run: |
-          # These are the 16 expected cache file basenames (tools)
+          # These are the 17 expected cache file basenames (tools)
           FILES="starship.tar.gz zoxide.tar.gz fzf.tar.gz bat.tar.gz eza.tar.gz \
                  ripgrep.tar.gz fd.tar.gz yazi.zip lazygit.tar.gz uv.tar.gz \
-                 glab.tar.gz jf delta.tar.gz nvim.appimage helm.tar.gz oc.tar.gz"
+                 glab.tar.gz jf delta.tar.gz nvim.appimage helm.tar.gz oc.tar.gz \
+                 fastfetch.tar.gz"
           FAIL=0
           for f in $FILES; do
             grep -qF "$f" airgap/bundle.sh || { echo "FAIL: bundle.sh missing $f"; FAIL=1; }
@@ -298,11 +299,12 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: registry.fedoraproject.org/fedora:43
+      options: --cap-add=NET_ADMIN   # needed for iptables/nftables
     steps:
       - uses: actions/checkout@v4
 
       - name: Install build deps
-        run: dnf install -y curl git tar gzip sudo
+        run: dnf install -y curl git tar gzip sudo iptables
 
       - name: Create test user
         run: |
@@ -315,7 +317,6 @@ jobs:
         run: |
           BUNDLE=$(ls airgap/devenv-bundle-*.tar.gz | head -1)
           echo "Bundle: $BUNDLE ($(du -h "$BUNDLE" | cut -f1))"
-          # Check rpms/ dir exists inside the tarball
           tar -tzf "$BUNDLE" | grep -q 'cache/rpms/' \
             || { echo "FAIL: bundle missing cache/rpms/"; exit 1; }
           RPM_COUNT=$(tar -tzf "$BUNDLE" | grep -c '\.rpm$')
@@ -324,18 +325,27 @@ jobs:
 
       - name: Remove system packages (simulate bare machine)
         run: |
-          # Remove packages that deploy.sh should reinstall from cached RPMs.
-          # Keep bash, coreutils, dnf, rpm, sudo — needed to run deploy itself.
           dnf remove -y stow podman buildah skopeo fuse-overlayfs \
               tmux ShellCheck tree htop 2>/dev/null || true
-          # Verify they're actually gone
           for cmd in stow podman buildah skopeo tmux; do
             command -v "$cmd" 2>/dev/null \
               && { echo "FAIL: $cmd still installed after removal"; exit 1; }
           done
           echo "System packages removed successfully"
 
-      - name: Run airgap deploy
+      - name: Block network (simulate airgap)
+        run: |
+          # Drop all outbound traffic except loopback
+          iptables -A OUTPUT -o lo -j ACCEPT
+          iptables -A OUTPUT -j DROP
+          # Verify: curl MUST fail
+          if curl -s --max-time 3 https://github.com >/dev/null 2>&1; then
+            echo "FAIL: Network still reachable after iptables block!"
+            exit 1
+          fi
+          echo "Network blocked — airgap simulation active"
+
+      - name: Run airgap deploy (offline)
         run: |
           BUNDLE=$(ls airgap/devenv-bundle-*.tar.gz | head -1)
           bash airgap/deploy.sh --user gl --force "$BUNDLE"
@@ -358,7 +368,7 @@ jobs:
         run: |
           BIN="/home/gl/.local/bin"
           FAIL=0
-          for tool in starship zoxide fzf bat eza rg fd lazygit delta nvim uv glab jf helm oc; do
+          for tool in starship zoxide fzf bat eza rg fd lazygit delta nvim uv glab jf helm oc fastfetch; do
             if [ -x "$BIN/$tool" ] || [ -x "$BIN/$tool.appimage" ]; then
               echo "  + $tool"
             else
@@ -369,6 +379,37 @@ jobs:
           [ $FAIL -eq 0 ] || { echo "FAIL: $FAIL tools missing"; exit 1; }
           echo "All CLI tools verified"
 
+      - name: Verify CLI tools actually run
+        run: |
+          BIN="/home/gl/.local/bin"
+          export PATH="$BIN:$PATH"
+          FAIL=0
+          check() {
+            local name="$1"; shift
+            if "$@" >/dev/null 2>&1; then echo "  + $name"; else echo "  X $name FAILED"; FAIL=$((FAIL+1)); fi
+          }
+          check "starship"   starship --version
+          check "zoxide"     zoxide --version
+          check "fzf"        fzf --version
+          check "bat"        bat --version
+          check "eza"        eza --version
+          check "rg"         rg --version
+          check "fd"         fd --version
+          check "lazygit"    lazygit --version
+          check "delta"      delta --version
+          check "uv"         uv --version
+          check "glab"       glab --version
+          check "jf"         jf --version
+          check "helm"       helm version --short
+          check "oc"         oc version --client
+          check "fastfetch"  fastfetch --version
+          # yazi produces no output from --version in non-TTY; use test -x
+          check "yazi"       test -x "$BIN/yazi"
+          # nvim needs --appimage-extract-and-run, use wrapper
+          check "nvim"       nvim --version
+          [ $FAIL -eq 0 ] || { echo "FAIL: $FAIL tools failed to run"; exit 1; }
+          echo "All CLI tools execute successfully"
+
       - name: Verify dotfiles stowed
         run: |
           FAIL=0
@@ -376,6 +417,7 @@ jobs:
             if eval "$2" 2>/dev/null; then echo "  + $1"; else echo "  X $1"; FAIL=$((FAIL+1)); fi
           }
           check "zshrc"         "test -e /home/gl/.zshrc"
+          check "zprofile"      "test -e /home/gl/.zprofile"
           check "starship.toml" "test -f /home/gl/.config/starship.toml"
           check "nvim config"   "test -f /home/gl/.config/nvim/init.lua"
           check "tmux.conf"     "test -f /home/gl/.config/tmux/tmux.conf"
@@ -384,6 +426,31 @@ jobs:
           check "zinit"         "test -d /home/gl/.local/share/zinit/zinit.git"
           [ $FAIL -eq 0 ] || { echo "FAIL: $FAIL configs missing"; exit 1; }
           echo "All dotfiles verified"
+
+      - name: Verify zinit plugins deployed
+        run: |
+          PLUGINS="/home/gl/.local/share/zinit/plugins"
+          FAIL=0
+          for plugin in \
+            zdharma-continuum---fast-syntax-highlighting \
+            zsh-users---zsh-autosuggestions \
+            zsh-users---zsh-completions \
+            Aloxaf---fzf-tab; do
+            if [ -d "$PLUGINS/$plugin" ] && [ "$(ls -A "$PLUGINS/$plugin")" ]; then
+              echo "  + $plugin"
+            else
+              echo "  X $plugin MISSING or empty"
+              FAIL=$((FAIL + 1))
+            fi
+          done
+          [ $FAIL -eq 0 ] || { echo "FAIL: $FAIL plugins missing"; exit 1; }
+          echo "All zinit plugins verified"
+
+      - name: Verify UV_PYTHON_DOWNLOADS is set in .zprofile
+        run: |
+          grep -q 'UV_PYTHON_DOWNLOADS=manual' /home/gl/.zprofile \
+            || { echo "FAIL: UV_PYTHON_DOWNLOADS=manual not in .zprofile"; exit 1; }
+          echo "UV_PYTHON_DOWNLOADS=manual verified in .zprofile"
 
   # ── Docker build test ──────────────────────────────────────────────
   docker-build:

@@ -214,6 +214,9 @@ alias v="nvim"
 alias vi="nvim"
 alias vim="nvim"
 
+# System info
+alias ff="fastfetch"
+
 # Yazi - cd to directory on exit
 function y() {
     local tmp="$(mktemp -t "yazi-cwd.XXXXXX")"

@@ -70,6 +70,7 @@ resolve_versions() {
     JFROG_CLI_VERSION="${JFROG_CLI_VERSION:-2.72.2}"  # no GitHub releases page
     HELM_VERSION="${HELM_VERSION:-$(gh_latest helm/helm)}"
     OC_VERSION="${OC_VERSION:-4.17}"                  # uses stable-X.Y channel, not a tag
+    FASTFETCH_VERSION="${FASTFETCH_VERSION:-$(gh_latest fastfetch-cli/fastfetch)}"
     MARIMO_VERSION="${MARIMO_VERSION:-}"               # empty = latest via uv
 }
 
@@ -132,7 +133,7 @@ gh_tool() {
 # ===== Print resolved versions =====
 echo ""
 echo "Versions:"
-for v in STARSHIP ZOXIDE FZF BAT EZA RIPGREP FD YAZI LAZYGIT DELTA NEOVIM UV GLAB JFROG_CLI HELM OC; do
+for v in STARSHIP ZOXIDE FZF BAT EZA RIPGREP FD YAZI LAZYGIT DELTA NEOVIM UV GLAB JFROG_CLI HELM OC FASTFETCH; do
     var="${v}_VERSION"
     printf "  %-14s %s\n" "$v" "${!var}"
 done
@@ -215,6 +216,12 @@ fetch "${TMP}/oc.tar.gz" "https://mirror.openshift.com/pub/openshift-v4/clients/
 mkdir -p "${TMP}/oc" && tar -xzf "${TMP}/oc.tar.gz" -C "${TMP}/oc"
 install -m 0755 "${TMP}/oc/oc" "${BIN}/oc"
 [[ -f "${TMP}/oc/kubectl" ]] && install -m 0755 "${TMP}/oc/kubectl" "${BIN}/kubectl"
+
+# fastfetch — system info tool
+echo "==> fastfetch ${FASTFETCH_VERSION}"
+fetch "${TMP}/fastfetch.tar.gz" "https://github.com/fastfetch-cli/fastfetch/releases/download/${FASTFETCH_VERSION}/fastfetch-linux-amd64.tar.gz"
+mkdir -p "${TMP}/fastfetch" && tar -xzf "${TMP}/fastfetch.tar.gz" -C "${TMP}/fastfetch" --strip-components=3
+install -m 0755 "${TMP}/fastfetch/fastfetch" "${BIN}/fastfetch"
 
 # uv — fast Python package manager
 echo "==> uv ${UV_VERSION}"
