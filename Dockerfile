@@ -32,11 +32,11 @@ SHELL ["/bin/bash", "-c"]
 RUN source /etc/os-release && \
     case "${ID:-}" in \
       fedora|rhel|centos|almalinux|rocky) \
-        # Enable EPEL on RHEL-family (no-op on Fedora). \
-        # UBI 9 doesn't ship epel-release in its default repos so install via \
-        # URL; fall back to package name for AlmaLinux/Rocky/CentOS. \
-        # dnf makecache refreshes metadata so the new EPEL repo is visible \
-        # to the package install that follows. \
+        # Enable extra repos on RHEL-family (no-op on Fedora). \
+        # UBI 9: enable the built-in AppStream + CRB repos (tmux, tree, stow \
+        #   live there), then add EPEL for ShellCheck and other extras. \
+        #   EPEL URL install is used because UBI 9 doesn't ship epel-release \
+        #   as a dnf package in its default sparse repos. \
         if [ "${ID}" != "fedora" ]; then \
           VER="${VERSION_ID%%.*}" && \
           dnf install -y \
@@ -44,6 +44,12 @@ RUN source /etc/os-release && \
             2>/dev/null \
           || dnf install -y epel-release 2>/dev/null \
           || true && \
+          dnf config-manager \
+            --set-enabled "ubi-${VER}-appstream-rpms" \
+            "ubi-${VER}-baseos-rpms" \
+            "ubi-${VER}-codeready-builder-rpms" \
+            crb powertools \
+            2>/dev/null || true && \
           dnf makecache; \
         fi && \
         dnf install -y \
