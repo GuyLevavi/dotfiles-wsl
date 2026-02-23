@@ -28,7 +28,7 @@ jobs:
           bash airgap/bundle.sh
           ls -lh airgap/devenv-bundle-*.tar.gz
 
-      - name: Upload bundle as release asset
+      - name: Create release and upload bundle
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
@@ -36,7 +36,11 @@ jobs:
           dnf install -y gh
           BUNDLE=$(ls airgap/devenv-bundle-*.tar.gz | head -1)
           TAG="${GITHUB_REF_NAME}"
-          gh release upload "$TAG" "$BUNDLE" --clobber
+          # Create release (or upload to existing one if manually created)
+          gh release create "$TAG" "$BUNDLE" \
+            --title "$TAG" \
+            --generate-notes \
+            || gh release upload "$TAG" "$BUNDLE" --clobber
 
   # ── Docker image (separate job, doesn't need Fedora runner) ────────
   docker:
