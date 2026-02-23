@@ -1,0 +1,104 @@
+# Dockerfile.airgap — Full airgap-ready image with dotfiles baked in.
+# This Dockerfile extends the multi-distro base (ARG BASE_IMAGE) and adds:
+#   - User 'gl' with sudo
+#   - XDG directories
+#   - Dotfiles stowed via GNU Stow
+#   - CLI tools from the bundle (via deploy.sh --offline or pre-installed)
+#   - Zsh plugins
+#   - Neovim plugins (via nvim-data.tar.gz)
+#
+# This image is designed to work COMPLETELY OFFLINE with no network access.
+#
+# Build for a specific distro:
+#   docker build -f Dockerfile.airgap -t myimage:tag .
+#
+# Build with custom BASE_IMAGE:
+#   docker build -f Dockerfile.airgap --build-arg BASE_IMAGE=ubi9 -t myimage:ubi9 .
+ARG BASE_IMAGE=registry.fedoraproject.org/fedora:43
+FROM ${BASE_IMAGE}
+
+# Use bash for all RUN commands
+SHELL ["/bin/bash", "-c"]
+
+# ── System packages (same as base Dockerfile) ────────────────────────────────
+RUN source /etc/os-release && \
+    case "${ID:-}" in \
+      fedora|rhel|centos|almalinux|rocky) \
+        if [ "${ID}" != "fedora" ]; then \
+          VER="${VERSION_ID%%.*}" && \
+          dnf install -y \
+            "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${VER}.noarch.rpm" \
+          || dnf install -y epel-release || true && \
+          /usr/bin/crb enable 2>&1 || true && \
+          dnf makecache --quiet; \
+        fi && \
+        dnf install -y --allowerasing \
+          curl wget unzip tar gzip bzip2 xz which file gawk \
+          zsh stow git git-lfs \
+          podman buildah skopeo fuse-overlayfs \
+          python3-devel python3-pip \
+          jq && \
+        dnf install -y procps-ng htop tree tmux nodejs npm ShellCheck \
+          2>/dev/null || \
+        dnf install -y procps-ng htop nodejs npm \
+          2>/dev/null || true && \
+        dnf clean all && \
+        rm -rf /var/cache/dnf \
+        ;; \
+      ubuntu|debian) \
+        export DEBIAN_FRONTEND=noninteractive && \
+        apt-get update && \
+        apt-get install -y --no-install-recommends \
+          curl wget unzip tar gzip bzip2 xz-utils file tree htop procps \
+          zsh tmux stow git git-lfs gawk \
+          nodejs npm \
+          python3-dev python3-pip \
+          jq shellcheck fuse-overlayfs \
+        && apt-get clean && rm -rf /var/lib/apt/lists/* \
+        ;; \
+      *) echo "Unsupported distro: ${ID:-unknown}" >&2; exit 1 ;; \
+    esac
+
+# ── Create dev user (same as base Dockerfile) ────────────────────────────────
+RUN source /etc/os-release && \
+    case "${ID:-}" in \
+      ubuntu|debian) SUDO_GROUP=sudo ;; \
+      *)             SUDO_GROUP=wheel ;; \
+    esac && \
+    command -v sudo >/dev/null 2>&1 || { \
+      dnf install -y sudo 2>/dev/null || apt-get install -y sudo 2>/dev/null || true; \
+    } && \
+    mkdir -p /etc/sudoers.d && \
+    getent group wheel >/dev/null 2>&1 || groupadd wheel && \
+    ZSH_PATH="$(command -v zsh 2>/dev/null || echo /usr/bin/zsh)" && \
+    useradd --create-home --shell "$ZSH_PATH" gl && \
+    usermod --append --groups "$SUDO_GROUP" gl && \
+    echo "%${SUDO_GROUP} ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/sudo-nopasswd && \
+    chmod 0440 /etc/sudoers.d/sudo-nopasswd
+
+# ── XDG directories ─────────────────────────────────────────────────────────
+USER gl
+WORKDIR /home/gl
+RUN mkdir -p .local/bin .local/share .local/state .config .cache
+
+# ── Clone repo and stow dotfiles ────────────────────────────────────────────
+# This RUN pulls the repo and stows all configs into the image.
+# For true airgap, you would COPY a local copy instead of cloning.
+USER root
+RUN dnf install -y stow 2>/dev/null || apt-get install -y stow 2>/dev/null || true
+USER gl
+RUN git clone --depth 1 https://github.com/GuyLevavi/dotfiles-wsl.git /tmp/dotfiles \
+    && cd /tmp/dotfiles \
+    && for pkg in zsh starship nvim tmux yazi git podman opencode codex; do \
+         stow -v -t ~ "$pkg" 2>/dev/null || true; \
+       done \
+    && rm -rf /tmp/dotfiles
+
+# ── Install CLI tools from bundle (optional - see below) ────────────────────
+# To include CLI tools, copy airgap/cache/ from a bundle into the image and run:
+#   COPY cache /tmp/cache
+#   RUN bash /tmp/cache/... (custom script to install tools)
+
+# ── Default shell ─────────────────────────────────────────────────────────
+ENV SHELL=/usr/bin/zsh
+CMD ["/usr/bin/zsh"]

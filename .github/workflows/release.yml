@@ -42,7 +42,7 @@ jobs:
             --generate-notes \
             || gh release upload "$TAG" "$BUNDLE" --clobber
 
-  # ── Docker images — one per supported base distro ──────────────────
+  # ── Docker images — full airgap-ready images with dotfiles baked in ────────
   docker:
     name: Docker (${{ matrix.name }})
     runs-on: ubuntu-latest
@@ -73,10 +73,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
+      - name: Build and push (airgap-ready with dotfiles)
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: ./Dockerfile.airgap
           push: true
           build-args: |
             BASE_IMAGE=${{ matrix.base_image }}

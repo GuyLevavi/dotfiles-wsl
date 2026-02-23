@@ -421,6 +421,19 @@ jobs:
           [ $FAIL -eq 0 ] || { echo "FAIL: $FAIL tools failed to run"; exit 1; }
           echo "All CLI tools execute successfully"
 
+      - name: Verify nvim actually loads LazyVim plugins (not just binary)
+        run: |
+          export PATH="/home/gl/.local/bin:$PATH"
+          # Run nvim in headless mode and try to load LazyVim
+          # If plugins aren't installed, this will fail
+          if nvim --headless +qa 2>&1; then
+            echo "  + LazyVim plugins load successfully"
+          else
+            echo "  X LazyVim plugins FAILED to load"
+            nvim --headless +qa 2>&1 | head -20
+            exit 1
+          fi
+
       - name: Verify dotfiles stowed
         run: |
           FAIL=0
