@@ -32,11 +32,15 @@ SHELL ["/bin/bash", "-c"]
 RUN source /etc/os-release && \
     case "${ID:-}" in \
       fedora|rhel|centos|almalinux|rocky) \
-        # Enable EPEL + CRB on RHEL-family (no-op on Fedora) \
+        # Enable EPEL on RHEL-family (no-op on Fedora) \
+        # UBI 9 doesn't ship epel-release as a package; install via URL instead. \
         if [ "${ID}" != "fedora" ]; then \
-          dnf install -y epel-release && \
-          (dnf config-manager --set-enabled crb 2>/dev/null || \
-           dnf config-manager --set-enabled powertools 2>/dev/null || true); \
+          VER="${VERSION_ID%%.*}" && \
+          dnf install -y \
+            "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${VER}.noarch.rpm" \
+            2>/dev/null \
+          || dnf install -y epel-release 2>/dev/null \
+          || true; \
         fi && \
         dnf install -y \
           curl wget unzip tar gzip bzip2 xz which file tree htop procps-ng \

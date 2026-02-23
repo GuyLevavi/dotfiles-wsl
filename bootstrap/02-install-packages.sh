@@ -80,9 +80,15 @@ fi
 
 if [[ "$PKG_MGR" == "dnf" ]]; then
     # Enable EPEL on RHEL-family distros (not needed on Fedora)
+    # UBI 9 doesn't ship epel-release as a DNF package; install via URL instead.
     case "${ID:-}" in
         almalinux|rocky|centos|rhel)
-            dnf install -y epel-release
+            VER="${VERSION_ID%%.*}"
+            dnf install -y \
+                "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${VER}.noarch.rpm" \
+                2>/dev/null \
+            || dnf install -y epel-release 2>/dev/null \
+            || true
             dnf config-manager --set-enabled crb 2>/dev/null \
                 || dnf config-manager --set-enabled powertools 2>/dev/null || true
             ;;
