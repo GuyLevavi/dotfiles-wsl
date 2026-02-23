@@ -205,10 +205,12 @@ install -m 0755 "${TMP}/jf" "${BIN}/jf"
 echo "==> neovim ${NEOVIM_VERSION}"
 fetch "${TMP}/nvim.appimage" "https://github.com/neovim/neovim/releases/download/v${NEOVIM_VERSION}/nvim-linux-x86_64.appimage"
 cp "${TMP}/nvim.appimage" "${BIN}/nvim.appimage" && chmod +x "${BIN}/nvim.appimage"
-cat > "${BIN}/nvim" << 'EOF'
+cat > "${BIN}/nvim" << 'WRAPPER'
 #!/usr/bin/env bash
-exec "${HOME}/.local/bin/nvim.appimage" --appimage-extract-and-run "$@"
-EOF
+# Resolve the directory this wrapper lives in (works even through symlinks)
+NVIM_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+exec "${NVIM_DIR}/nvim.appimage" --appimage-extract-and-run "$@"
+WRAPPER
 chmod +x "${BIN}/nvim"
 
 # oc — OpenShift CLI (also bundles kubectl)
