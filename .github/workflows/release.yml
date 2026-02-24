@@ -86,15 +86,19 @@ jobs:
           ls -la bundle-dir/
           # Copy to expected location for Dockerfile (explicit filename)
           cp bundle-dir/devenv-bundle-*.tar.gz ./devenv-bundle.tar.gz
+          # Verify copy worked
+          ls -la *.tar.gz
+          echo "=== Bundle ready for Docker ==="
 
       - name: Build and push (airgap-ready with dotfiles)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile.airgap
-          push: true
-          build-args: |
-            BASE_IMAGE=${{ matrix.base_image }}
-          tags: |
-            ${{ env.IMAGE }}:${{ github.ref_name }}${{ matrix.tag_suffix }}
-            ${{ env.IMAGE }}:latest${{ matrix.tag_suffix }}
+        run: |
+          # Build directly with docker to ensure bundle is in context
+          docker build \
+            --build-arg BASE_IMAGE=${{ matrix.base_image }} \
+            -f ./Dockerfile.airgap \
+            -t ${{ env.IMAGE }}:${{ github.ref_name }}${{ matrix.tag_suffix }} \
+            -t ${{ env.IMAGE }}:latest${{ matrix.tag_suffix }} \
+            --progress=plain \
+            .
+          docker push ${{ env.IMAGE }}:${{ github.ref_name }}${{ matrix.tag_suffix }}
+          docker push ${{ env.IMAGE }}:latest${{ matrix.tag_suffix }}
