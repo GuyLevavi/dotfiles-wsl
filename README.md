@@ -113,16 +113,19 @@ Pinned release tags follow the same pattern: `v1.3.0`, `v1.3.0-ubi9`,
 **Option A: With the airgap bundle** (recommended for full offline)
 
 ```bash
+# IMPORTANT: Run from the repo root directory!
 # 1. Copy the bundle to your airgapped machine
-# 2. Run deploy.sh inside the container
+# 2. Run deploy.sh inside the container (must be in repo root)
 docker run -it --rm \
-  -v /path/to/devenv-bundle-*.tar.gz:/bundle.tar.gz \
+  -v "${PWD}:/opt/project" \
   ghcr.io/guylevavi/dotfiles-wsl:latest \
-  bash airgap/deploy.sh --user gl --force /bundle.tar.gz
+  bash /opt/project/airgap/deploy.sh --user gl --force /opt/project/airgap/bundle.tar.gz
 
 # 3. Attach and test
 docker run -it --rm ghcr.io/guylevavi/dotfiles-wsl:latest zsh
 ```
+
+> **Troubleshooting:** If you see "bootstrap scripts not found", you're not running from the repo root. The `${PWD}` must contain the `airgap/` and `bootstrap/` directories.
 
 **Option B: Build your own with tools included**
 

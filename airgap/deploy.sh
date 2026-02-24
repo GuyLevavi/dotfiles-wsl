@@ -117,7 +117,7 @@ if $is_update && $FORCE; then
     for f in .zshrc .zprofile .config/nvim .config/starship.toml .config/yazi .gitconfig; do
         [[ -e "$USER_HOME/$f" && ! -L "$USER_HOME/$f" ]] && {
             mkdir -p "$backup/$(dirname "$f")"
-            cp -a "$USER_HOME/$f" "$backup/$f"
+            mv "$USER_HOME/$f" "$backup/$f"
         }
     done
     ok "Backed up to $backup"
@@ -155,7 +155,11 @@ if [[ "$(id -u)" -eq 0 && -f "$REPO_ROOT/bootstrap/02-install-packages.sh" ]]; t
         warn "Re-run bundle.sh on a ${_pkg_mgr} host to include system packages."
     fi
 else
-    warn "Skipping system packages (not root or script missing)"
+    if [[ "$(id -u)" -ne 0 ]]; then
+        warn "Skipping system packages (not root)"
+    else
+        warn "Skipping system packages (bootstrap scripts not found at $REPO_ROOT/bootstrap/)"
+    fi
 fi
 
 # ===== Step 3: CLI tools (offline) =====

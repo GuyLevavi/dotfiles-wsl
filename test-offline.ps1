@@ -87,6 +87,16 @@ if (-not $bundle) {
 }
 Write-Ok "Using bundle: $($bundle.Name)"
 
+# Verify bundle contains nvim-data.tar.gz
+Write-Step "Verifying bundle contents..."
+$bundleCheck = & wsl -- bash -c "tar -tzf '$($bundle.FullName -replace '\\','/' -replace 'C:','/mnt/c')' | grep nvim-data"
+if ($LASTEXITCODE -ne 0 -or -not $bundleCheck) {
+    Write-Fail "Bundle is MISSING nvim-data.tar.gz — nvim plugins will download on first launch!"
+    Write-Fail "Run bundle.sh on an online host to include nvim plugins."
+    exit 1
+}
+Write-Ok "Bundle contains nvim-data.tar.gz"
+
 # ── Step 2: Clone the WSL distro ────────────────────────────────────────────
 Remove-TestDistro
 
@@ -293,6 +303,12 @@ check "zsh-completions"          "test -d ~/.local/share/zinit/plugins/zsh-users
 check "fzf-tab"                  "test -d ~/.local/share/zinit/plugins/Aloxaf---fzf-tab"
 
 echo ""
+echo "Plugin verification (nvim LazyVim offline cache):"
+check "nvim lazy dir exists"     "test -d ~/.local/share/nvim/lazy"
+check "nvim lazy not empty"      "test -n \"\$(ls -A ~/.local/share/nvim/lazy 2>/dev/null)\""
+check "nvim state dir exists"    "test -d ~/.local/state/nvim"
+
+echo ""
 echo "Functional verification (tools actually work):"
 check "starship --version"   "$BIN/starship --version"
 check "fzf --version"        "$BIN/fzf --version"
@@ -314,6 +330,11 @@ echo ""
 echo "Environment verification:"
 check "UV_PYTHON_DOWNLOADS"  "grep -q 'UV_PYTHON_DOWNLOADS=manual' ~/.zprofile"
 check "zprofile exists"      "test -e ~/.zprofile"
+
+echo ""
+echo "Neovim offline verification (critical):"
+check "nvim launches headless" "$BIN/nvim --headless +'lua vim.cmd(\"quitall\")' +qa 2>&1 | grep -qv 'git clone'"
+check "nvim lazy dir populated" "test \$(find ~/.local/share/nvim/lazy -maxdepth 1 -type d | wc -l) -gt 5"
 
 echo ""
 echo "Results: $passed/$total passed, $failed failed"
