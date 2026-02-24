@@ -84,8 +84,8 @@ jobs:
       - name: Prepare bundle for Docker build
         run: |
           ls -la bundle-dir/
-          # Copy to expected location for Dockerfile
-          cp bundle-dir/*.tar.gz .
+          # Copy to expected location for Dockerfile (explicit filename)
+          cp bundle-dir/devenv-bundle-*.tar.gz ./devenv-bundle.tar.gz
 
       - name: Build and push (airgap-ready with dotfiles)
         uses: docker/build-push-action@v6

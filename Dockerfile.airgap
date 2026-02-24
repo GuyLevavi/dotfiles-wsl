@@ -98,7 +98,7 @@ RUN git clone --depth 1 https://github.com/GuyLevavi/dotfiles-wsl.git /tmp/dotfi
 # The bundle should have been built on an online machine with:
 #   bash airgap/bundle.sh
 # Then copy the tarball into the build context.
-COPY devenv-bundle-*.tar.gz /tmp/devenv-bundle.tar.gz 2>/dev/null || true
+COPY devenv-bundle.tar.gz /tmp/devenv-bundle.tar.gz 2>/dev/null || true
 RUN if [[ -f /tmp/devenv-bundle.tar.gz ]]; then \
       echo "Installing from bundle..." && \
       cd /tmp && tar -xzf devenv-bundle.tar.gz && \
