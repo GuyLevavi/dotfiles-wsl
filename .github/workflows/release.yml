@@ -18,11 +18,56 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install build deps
-        run: dnf install -y curl git tar gzip
+        run: dnf install -y curl git tar gzip python3 python3-pip
+
+      - name: Set up nvim and download LazyVim plugins
+        run: |
+          # Download and install nvim appimage
+          NEOVIM_VERSION="v0.11.0"
+          curl -sLo /tmp/nvim.appimage "https://github.com/neovim/neovim/releases/download/${NEOVIM_VERSION}/nvim-linux-x86_64.appimage"
+          chmod +x /tmp/nvim.appimage
+          
+          # Extract appimage
+          cd /tmp
+          ./nvim.appimage --appimage-extract >/dev/null 2>&1
+          export PATH="/tmp/squashfs-root/usr/bin:$PATH"
+          
+          # Create nvim directories
+          mkdir -p ~/.local/share/nvim ~/.local/state/nvim ~/.config/nvim
+          
+          # Copy config from repo
+          cp -r /airgap/../nvim/.config/nvim ~/.config/
+          
+          # Run nvim to trigger lazy.nvim sync
+          export XDG_CONFIG_HOME=~/.config
+          export XDG_DATA_HOME=~/.local/share
+          export XDG_STATE_HOME=~/.local/state
+          
+          # Run Lazy sync to download all plugins
+          nvim --headless -c "lua require('lazy').sync({wait = true})" -c "qa" 2>&1 || true
+          
+          # Check plugins were downloaded
+          PLUGIN_COUNT=$(find ~/.local/share/nvim/lazy -maxdepth 1 -type d 2>/dev/null | wc -l)
+          echo "Downloaded $PLUGIN_COUNT plugins"
+
+      - name: Create nvim-data.tar.gz
+        run: |
+          # Copy extracted appimage to expected location
+          cp /tmp/squashfs-root/usr/bin/nvim /tmp/nvim-extracted
+          
+          # Create nvim-data.tar.gz from plugins
+          tar -czf airgap/nvim-data.tar.gz -C ~ .local/share/nvim .local/state/nvim
+          ls -lh airgap/nvim-data.tar.gz
 
       - name: Build airgap bundle
-        id: bundle
         run: |
+          # Move nvim to cache so it gets bundled
+          mkdir -p airgap/cache
+          cp /tmp/nvim.appimage airgap/cache/
+          cp /tmp/nvim-extracted airgap/cache/nvim
+          cp airgap/nvim-data.tar.gz airgap/cache/
+          
+          # Run bundle.sh
           bash airgap/bundle.sh
           ls -lh airgap/devenv-bundle-*.tar.gz
 
