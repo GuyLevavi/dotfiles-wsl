@@ -35,8 +35,8 @@ jobs:
           # Create nvim directories
           mkdir -p ~/.local/share/nvim ~/.local/state/nvim ~/.config/nvim
           
-          # Copy config from repo
-          cp -r /airgap/../nvim/.config/nvim ~/.config/
+          # Copy config from repo (checkout is in $GITHUB_WORKSPACE)
+          cp -r "$GITHUB_WORKSPACE/nvim/.config/nvim" ~/.config/
           
           # Run nvim to trigger lazy.nvim sync
           export XDG_CONFIG_HOME=~/.config
