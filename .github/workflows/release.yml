@@ -22,11 +22,19 @@ jobs:
         run: dnf install -y curl git tar gzip
 
       - name: Build airgap bundle
+        id: bundle
         run: |
           # bundle.sh sources 03-install-tools.sh which calls resolve_versions
           # and needs curl/git. It downloads tool binaries + RPMs.
           bash airgap/bundle.sh
           ls -lh airgap/devenv-bundle-*.tar.gz
+          echo "bundle=$(ls airgap/devenv-bundle-*.tar.gz | head -1)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload bundle as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: airgap-bundle
+          path: airgap/devenv-bundle-*.tar.gz
 
       - name: Create release and upload bundle
         env:
@@ -46,6 +54,7 @@ jobs:
   docker:
     name: Docker (${{ matrix.name }})
     runs-on: ubuntu-latest
+    needs: release
     strategy:
       matrix:
         include:
@@ -62,6 +71,12 @@ jobs:
       IMAGE: ghcr.io/${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download bundle from release job
+        uses: actions/download-artifact@v4
+        with:
+          name: airgap-bundle
+          path: .
 
       - name: Lowercase image name
         run: echo "IMAGE=${IMAGE,,}" >> "$GITHUB_ENV"
