@@ -92,13 +92,17 @@ jobs:
 
       - name: Build and push (airgap-ready with dotfiles)
         run: |
+          # Show what's in the current directory
+          pwd
+          ls -la
           # Build directly with docker to ensure bundle is in context
-          docker build \
+          docker buildx build \
             --build-arg BASE_IMAGE=${{ matrix.base_image }} \
             -f ./Dockerfile.airgap \
             -t ${{ env.IMAGE }}:${{ github.ref_name }}${{ matrix.tag_suffix }} \
             -t ${{ env.IMAGE }}:latest${{ matrix.tag_suffix }} \
+            --no-cache \
+            --context . \
             --progress=plain \
+            --push \
             .
-          docker push ${{ env.IMAGE }}:${{ github.ref_name }}${{ matrix.tag_suffix }}
-          docker push ${{ env.IMAGE }}:latest${{ matrix.tag_suffix }}

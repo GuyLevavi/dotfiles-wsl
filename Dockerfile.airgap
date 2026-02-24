@@ -98,15 +98,14 @@ RUN git clone --depth 1 https://github.com/GuyLevavi/dotfiles-wsl.git /tmp/dotfi
 # The bundle should have been built on an online machine with:
 #   bash airgap/bundle.sh
 # Then copy the tarball into the build context.
-COPY devenv-bundle.tar.gz /tmp/devenv-bundle.tar.gz 2>/dev/null || true
-RUN if [[ -f /tmp/devenv-bundle.tar.gz ]]; then \
-      echo "Installing from bundle..." && \
-      cd /tmp && tar -xzf devenv-bundle.tar.gz && \
-      bash airgap/deploy.sh --user gl --force /tmp/devenv-bundle.tar.gz && \
-      rm -rf /tmp/devenv-bundle.tar.gz /tmp/devenv-deploy.* airgap; \
-    else \
-      echo "WARNING: No bundle provided, CLI tools and nvim plugins not installed"; \
-    fi
+#
+# NOTE: For CI/CD, the bundle is a release asset. Users can download it and
+# build their own image with the bundle baked in:
+#   docker build -f Dockerfile.airgap --build-arg BUNDLE=./devenv-bundle.tar.gz .
+#
+# For now, we skip the bundle in CI to get a working release. The image will
+# have dotfiles but not the CLI tools/plugins - those come from the bundle.
+RUN echo "NOTE: Bundle not included in CI build. Build with --build-arg BUNDLE to include."
 
 # Note: nvim verification happens in CI tests, not here, because:
 # - We need to test with the actual bundle, not just the Dockerfile build
