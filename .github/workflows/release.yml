@@ -102,7 +102,6 @@ jobs:
             -t ${{ env.IMAGE }}:${{ github.ref_name }}${{ matrix.tag_suffix }} \
             -t ${{ env.IMAGE }}:latest${{ matrix.tag_suffix }} \
             --no-cache \
-            --context . \
             --progress=plain \
             --push \
             .
