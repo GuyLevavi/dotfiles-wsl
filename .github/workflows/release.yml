@@ -76,22 +76,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: airgap-bundle
-          path: .
-
-      - name: Lowercase image name
-        run: echo "IMAGE=${IMAGE,,}" >> "$GITHUB_ENV"
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          path: bundle-dir
 
       - name: Prepare bundle for Docker build
         run: |
-          # Copy bundle to repo root so Docker can COPY it
-          cp airgap/devenv-bundle-*.tar.gz ./
+          ls -la bundle-dir/
+          # Copy to expected location for Dockerfile
+          cp bundle-dir/*.tar.gz .
 
       - name: Build and push (airgap-ready with dotfiles)
         uses: docker/build-push-action@v6
