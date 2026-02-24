@@ -320,18 +320,25 @@ jobs:
         run: |
           bash bootstrap/01-create-user.sh gl
 
-      - name: Build airgap bundle (with RPMs)
+      - name: Build airgap bundle (with RPMs and nvim plugins)
         run: bash airgap/bundle.sh
 
-      - name: Verify bundle contains RPMs
+      - name: Verify bundle contents
         run: |
           BUNDLE=$(ls airgap/devenv-bundle-*.tar.gz | head -1)
           echo "Bundle: $BUNDLE ($(du -h "$BUNDLE" | cut -f1))"
+          
+          # Check RPMs
           tar -tzf "$BUNDLE" | grep -q 'cache/rpms/' \
             || { echo "FAIL: bundle missing cache/rpms/"; exit 1; }
           RPM_COUNT=$(tar -tzf "$BUNDLE" | grep -c '\.rpm$')
           echo "RPMs in bundle: $RPM_COUNT"
           [ "$RPM_COUNT" -gt 0 ] || { echo "FAIL: no RPMs in bundle"; exit 1; }
+          
+          # Check nvim plugins were downloaded
+          tar -tzf "$BUNDLE" | grep -q 'cache/nvim-data.tar.gz' \
+            || { echo "FAIL: bundle missing cache/nvim-data.tar.gz - nvim won't work offline!"; exit 1; }
+          echo "nvim-data.tar.gz present in bundle"
 
       - name: Remove system packages (simulate bare machine)
         run: |
@@ -424,12 +431,25 @@ jobs:
       - name: Verify nvim actually loads LazyVim plugins (not just binary)
         run: |
           export PATH="/home/gl/.local/bin:$PATH"
-          # Run nvim in headless mode and try to load LazyVim
-          # If plugins aren't installed, this will fail
-          if nvim --headless +qa 2>&1; then
-            echo "  + LazyVim plugins load successfully"
+          
+          # First, verify plugin directories exist
+          LAZY_DIR="/home/gl/.local/share/nvim/lazy"
+          if [ -d "$LAZY_DIR" ]; then
+            PLUGIN_COUNT=$(find "$LAZY_DIR" -maxdepth 1 -type d | wc -l)
+            echo "  + Lazy plugin dir exists with $PLUGIN_COUNT plugins"
           else
-            echo "  X LazyVim plugins FAILED to load"
+            echo "  X Lazy plugin directory missing: $LAZY_DIR"
+            exit 1
+          fi
+          
+          # Now test that nvim can actually load Lazy without errors
+          # Use lua to check that lazy is loaded and has plugins
+          if nvim --headless \
+            -c 'lua print("Plugins: " .. require("lazy").stats().count)' \
+            -c 'qa' 2>&1 | grep -q "Plugins:"; then
+            echo "  + LazyVim loaded successfully"
+          else
+            echo "  X LazyVim FAILED to load properly"
             nvim --headless +qa 2>&1 | head -20
             exit 1
           fi

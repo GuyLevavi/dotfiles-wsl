@@ -1,20 +1,21 @@
-# Dockerfile.airgap — Full airgap-ready image with dotfiles baked in.
-# This Dockerfile extends the multi-distro base (ARG BASE_IMAGE) and adds:
-#   - User 'gl' with sudo
-#   - XDG directories
-#   - Dotfiles stowed via GNU Stow
-#   - CLI tools from the bundle (via deploy.sh --offline or pre-installed)
-#   - Zsh plugins
-#   - Neovim plugins (via nvim-data.tar.gz)
+# Dockerfile.airgap — Full airgap-ready image with everything baked in.
 #
-# This image is designed to work COMPLETELY OFFLINE with no network access.
+# This Dockerfile expects you to COPY a pre-built bundle tarball into the image.
+# The bundle should contain: CLI tools, system packages, zsh plugins, nvim plugins.
 #
-# Build for a specific distro:
+# Build:
+#   # First, build the bundle on an online machine:
+#   bash airgap/bundle.sh
+#
+#   # Then build the Docker image (from the same machine with the bundle):
+#   docker build -f Dockerfile.airgap \
+#     --build-arg BUNDLE=../airgap/devenv-bundle-20260224.tar.gz \
+#     -t myimage:tag .
+#
+# Or build without bundle (will have configs but no tools/plugins):
 #   docker build -f Dockerfile.airgap -t myimage:tag .
-#
-# Build with custom BASE_IMAGE:
-#   docker build -f Dockerfile.airgap --build-arg BASE_IMAGE=ubi9 -t myimage:ubi9 .
 ARG BASE_IMAGE=registry.fedoraproject.org/fedora:43
+ARG BUNDLE=
 FROM ${BASE_IMAGE}
 
 # Use bash for all RUN commands
@@ -59,7 +60,7 @@ RUN source /etc/os-release && \
       *) echo "Unsupported distro: ${ID:-unknown}" >&2; exit 1 ;; \
     esac
 
-# ── Create dev user (same as base Dockerfile) ────────────────────────────────
+# ── Create dev user ─────────────────────────────────────────────────────────
 RUN source /etc/os-release && \
     case "${ID:-}" in \
       ubuntu|debian) SUDO_GROUP=sudo ;; \
@@ -82,8 +83,6 @@ WORKDIR /home/gl
 RUN mkdir -p .local/bin .local/share .local/state .config .cache
 
 # ── Clone repo and stow dotfiles ────────────────────────────────────────────
-# This RUN pulls the repo and stows all configs into the image.
-# For true airgap, you would COPY a local copy instead of cloning.
 USER root
 RUN dnf install -y stow 2>/dev/null || apt-get install -y stow 2>/dev/null || true
 USER gl
@@ -94,10 +93,24 @@ RUN git clone --depth 1 https://github.com/GuyLevavi/dotfiles-wsl.git /tmp/dotfi
        done \
     && rm -rf /tmp/dotfiles
 
-# ── Install CLI tools from bundle (optional - see below) ────────────────────
-# To include CLI tools, copy airgap/cache/ from a bundle into the image and run:
-#   COPY cache /tmp/cache
-#   RUN bash /tmp/cache/... (custom script to install tools)
+# ── If bundle provided, install tools + plugins via deploy.sh ─────────────────
+# This is what makes the image truly "airgap ready" - everything from bundle.
+# The bundle should have been built on an online machine with:
+#   bash airgap/bundle.sh
+# Then copy the tarball into the build context.
+COPY devenv-bundle-*.tar.gz /tmp/devenv-bundle.tar.gz 2>/dev/null || true
+RUN if [[ -f /tmp/devenv-bundle.tar.gz ]]; then \
+      echo "Installing from bundle..." && \
+      cd /tmp && tar -xzf devenv-bundle.tar.gz && \
+      bash airgap/deploy.sh --user gl --force /tmp/devenv-bundle.tar.gz && \
+      rm -rf /tmp/devenv-bundle.tar.gz /tmp/devenv-deploy.* airgap; \
+    else \
+      echo "WARNING: No bundle provided, CLI tools and nvim plugins not installed"; \
+    fi
+
+# Note: nvim verification happens in CI tests, not here, because:
+# - We need to test with the actual bundle, not just the Dockerfile build
+# - The release workflow already tests this
 
 # ── Default shell ─────────────────────────────────────────────────────────
 ENV SHELL=/usr/bin/zsh

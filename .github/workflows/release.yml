@@ -73,6 +73,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Prepare bundle for Docker build
+        run: |
+          # Copy bundle to repo root so Docker can COPY it
+          cp airgap/devenv-bundle-*.tar.gz ./
+
       - name: Build and push (airgap-ready with dotfiles)
         uses: docker/build-push-action@v6
         with:

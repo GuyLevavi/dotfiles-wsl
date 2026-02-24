@@ -173,59 +173,105 @@ echo ""
 log "Neovim plugins"
 NVIM_DATA="${CACHE}/nvim-data.tar.gz"
 if [[ -f "$NVIM_DATA" ]]; then
-    ok "nvim-data.tar.gz found"
+    ok "nvim-data.tar.gz found ($(du -h "$NVIM_DATA" | cut -f1))"
 else
     # Need to download LazyVim plugins for offline use.
     # This requires network (bundle.sh runs on an online machine).
+    # Ensure nvim is available
     if [[ -z "${NEOVIM_VERSION:-}" ]]; then
-        source "${SCRIPT_DIR}/../bootstrap/03-install-tools.sh" 2>/dev/null || true
+        source "${SCRIPT_DIR}/../bootstrap/03-install-tools.sh"
     fi
+
+    echo "  Setting up temporary environment for nvim plugin download..."
 
     # Create a temporary home for nvim to download plugins into
     NVIM_HOME=$(mktemp -d)
+    trap 'rm -rf "$NVIM_HOME"' EXIT
     export HOME="$NVIM_HOME"
     mkdir -p "$HOME/.local/bin" "$HOME/.local/share" "$HOME/.local/state"
     mkdir -p "$HOME/.config/nvim"
 
-    # Install nvim to temp home
+    # Install nvim from cached appimage
     if [[ -f "${CACHE}/nvim.appimage" ]]; then
+        echo "  Extracting nvim..."
         chmod +x "${CACHE}/nvim.appimage"
+        NVM_SQUASHFS="${NVIM_HOME}/squashfs-root"
         "$CACHE/nvim.appimage" --appimage-extract >/dev/null 2>&1
-        ln -sf "$NVIM_HOME/squashfs-root/usr/bin/nvim" "$HOME/.local/bin/nvim"
+        if [[ -x "$NVM_SQUASHFS/usr/bin/nvim" ]]; then
+            ln -sf "$NVM_SQUASHFS/usr/bin/nvim" "$HOME/.local/bin/nvim"
+            echo "  + nvim extracted"
+        else
+            echo "  ! nvim extraction failed"
+            exit 1
+        fi
     else
-        warn "nvim.appimage not in cache — cannot download LazyVim plugins"
+        echo "  ! nvim.appimage not in cache at ${CACHE}/nvim.appimage"
+        echo "  ! Available files: $(ls -la "${CACHE}/" 2>/dev/null | head -5)"
+        exit 1
     fi
 
-    # Link or copy nvim config from this repo
+    # Copy nvim config from repo
     if [[ -d "${SCRIPT_DIR}/../nvim/.config/nvim" ]]; then
         cp -r "${SCRIPT_DIR}/../nvim/.config/nvim" "$HOME/.config/"
+        echo "  + nvim config copied"
+    else
+        echo "  ! nvim config not found at ${SCRIPT_DIR}/../nvim/.config/nvim"
+        exit 1
     fi
 
-    # Also need zsh for lazy.nvim's health checks
+    # Link zsh if available (needed for lazy.nvim health checks)
     if command -v zsh &>/dev/null; then
         ln -sf "$(command -v zsh)" "$HOME/.local/bin/zsh"
     fi
 
-    # Run LazySync to download all plugins
-    echo "  Downloading LazyVim plugins (this takes ~30s)..."
+    # Run Lazy sync to download all plugins
+    # Use lua require for reliable headless sync
+    echo "  Downloading LazyVim plugins (this takes ~60s)..."
     export PATH="$HOME/.local/bin:$PATH"
-    if "$HOME/.local/bin/nvim" --headless +LazySync +qa 2>&1 | tail -3; then
-        echo "  LazyVim plugins downloaded"
+
+    # First, check if LazyVim can initialize
+    if ! nvim --headless -c "echo 'LazyVim init test'" -c "qa" 2>&1 | grep -v "^$"; then
+        echo "  ! LazyVim initialization failed"
+        nvim --headless +qa 2>&1 | head -10
+        exit 1
+    fi
+
+    # Sync plugins - this is the correct way for LazyVim
+    echo "  Running Lazy sync..."
+    set +e  # Don't exit on error from nvim
+    SYNC_OUTPUT=$(nvim --headless -c "lua require('lazy').sync({wait = true})" -c "qa" 2>&1)
+    SYNC_EXIT=$?
+    set -e
+
+    if echo "$SYNC_OUTPUT" | grep -q "Error\|error\|failed\|Failed"; then
+        echo "  ! Lazy sync had errors:"
+        echo "$SYNC_OUTPUT" | head -20
+    fi
+
+    if [[ $SYNC_EXIT -eq 0 ]]; then
+        echo "  + LazyVim plugins synced"
+
+        # Check that plugins were actually downloaded
+        PLUGIN_COUNT=$(find "$HOME/.local/share/nvim/lazy" -maxdepth 1 -type d 2>/dev/null | wc -l)
+        echo "  + Found $PLUGIN_COUNT plugin directories"
+
         # Create nvim-data.tar.gz from the plugin dirs
         cd "$HOME/.local"
         tar -czf "$NVIM_DATA" share/nvim state/nvim 2>/dev/null || true
         cd - >/dev/null
+
         if [[ -s "$NVIM_DATA" ]]; then
             ok "nvim-data.tar.gz created ($(du -h "$NVIM_DATA" | cut -f1))"
         else
             rm -f "$NVIM_DATA"
-            warn "nvim-data.tar.gz is empty —LazyVim may have failed"
+            echo "  ! nvim-data.tar.gz is empty — syncing may have failed"
+            exit 1
         fi
     else
-        warn "LazyVim plugin download failed — nvim will need network on first launch"
+        echo "  ! LazyVim plugin download failed with exit code $SYNC_EXIT"
+        echo "  Output: $SYNC_OUTPUT"
+        exit 1
     fi
-
-    rm -rf "$NVIM_HOME"
 fi
 
 # ===== versions.lock =====
