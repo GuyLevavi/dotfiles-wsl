@@ -68,9 +68,12 @@ jobs:
             base_image: ubuntu:24.04
             tag_suffix: -ubuntu2404
     env:
-      IMAGE: ghcr.io/${{ github.repository }}
+      REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set lowercase image name
+        run: echo "IMAGE=ghcr.io/$(echo '${{ env.REPO }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
 
       - name: Download bundle from release job
         uses: actions/download-artifact@v4
