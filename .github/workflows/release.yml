@@ -6,7 +6,6 @@ on:
 
 permissions:
   contents: write
-  packages: write
 
 jobs:
   # ── Build bundle tarball on Fedora (canonical build host) ──────────
@@ -24,17 +23,8 @@ jobs:
       - name: Build airgap bundle
         id: bundle
         run: |
-          # bundle.sh sources 03-install-tools.sh which calls resolve_versions
-          # and needs curl/git. It downloads tool binaries + RPMs.
           bash airgap/bundle.sh
           ls -lh airgap/devenv-bundle-*.tar.gz
-          echo "bundle=$(ls airgap/devenv-bundle-*.tar.gz | head -1)" >> "$GITHUB_OUTPUT"
-
-      - name: Upload bundle as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: airgap-bundle
-          path: airgap/devenv-bundle-*.tar.gz
 
       - name: Create release and upload bundle
         env:
@@ -44,71 +34,7 @@ jobs:
           dnf install -y gh
           BUNDLE=$(ls airgap/devenv-bundle-*.tar.gz | head -1)
           TAG="${GITHUB_REF_NAME}"
-          # Create release (or upload to existing one if manually created)
           gh release create "$TAG" "$BUNDLE" \
             --title "$TAG" \
             --generate-notes \
             || gh release upload "$TAG" "$BUNDLE" --clobber
-
-  # ── Docker images — full airgap-ready images with dotfiles baked in ────────
-  docker:
-    name: Docker (${{ matrix.name }})
-    runs-on: ubuntu-latest
-    needs: release
-    strategy:
-      matrix:
-        include:
-          - name: fedora43
-            base_image: registry.fedoraproject.org/fedora:43
-            tag_suffix: ""          # also gets :latest
-          - name: ubi9
-            base_image: registry.access.redhat.com/ubi9/ubi:latest
-            tag_suffix: -ubi9
-          - name: ubuntu2404
-            base_image: ubuntu:24.04
-            tag_suffix: -ubuntu2404
-    env:
-      REPO: ${{ github.repository }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set lowercase image name
-        run: echo "IMAGE=ghcr.io/$(echo '${{ env.REPO }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Download bundle from release job
-        uses: actions/download-artifact@v4
-        with:
-          name: airgap-bundle
-          path: bundle-dir
-
-      - name: Prepare bundle for Docker build
-        run: |
-          ls -la bundle-dir/
-          # Copy to expected location for Dockerfile (explicit filename)
-          cp bundle-dir/devenv-bundle-*.tar.gz ./devenv-bundle.tar.gz
-          # Verify copy worked
-          ls -la *.tar.gz
-          echo "=== Bundle ready for Docker ==="
-
-      - name: Build and push (airgap-ready with dotfiles)
-        run: |
-          # Show what's in the current directory
-          pwd
-          ls -la
-          # Build directly with docker to ensure bundle is in context
-          docker buildx build \
-            --build-arg BASE_IMAGE=${{ matrix.base_image }} \
-            -f ./Dockerfile.airgap \
-            -t ${{ env.IMAGE }}:${{ github.ref_name }}${{ matrix.tag_suffix }} \
-            -t ${{ env.IMAGE }}:latest${{ matrix.tag_suffix }} \
-            --no-cache \
-            --progress=plain \
-            --push \
-            .
