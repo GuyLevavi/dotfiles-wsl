@@ -10,6 +10,9 @@ CACHE="${SCRIPT_DIR}/cache"
 # shellcheck source=../bootstrap/03-install-tools.sh
 source "${SCRIPT_DIR}/../bootstrap/03-install-tools.sh"
 
+# Resolve versions now (bundle.sh is executed, not sourced)
+resolve_versions
+
 DRY_RUN=false
 [[ "${1:-}" == "--dry-run" ]] && DRY_RUN=true
 
