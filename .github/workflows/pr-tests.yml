@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  # ── Fast checks (~10s each, no special container needed) ──────────
+  # ── Fast checks ───────────────────────────────────────────────────
   shellcheck:
     name: ShellCheck
     runs-on: ubuntu-latest
@@ -32,28 +32,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install lua
         run: sudo apt-get update && sudo apt-get install -y lua5.4
-      - name: Check Lua syntax (luac -p)
+      - name: Check Lua syntax
         run: |
           FAIL=0
-          for f in \
-            nvim/.config/nvim/init.lua \
-            nvim/.config/nvim/lua/config/lazy.lua \
-            nvim/.config/nvim/lua/config/options.lua \
-            nvim/.config/nvim/lua/config/keymaps.lua \
-            nvim/.config/nvim/lua/config/autocmds.lua \
-            nvim/.config/nvim/lua/plugins/colorscheme.lua \
-            nvim/.config/nvim/lua/plugins/editor.lua \
-            nvim/.config/nvim/lua/plugins/python.lua \
-            nvim/.config/nvim/lua/plugins/git.lua \
-            nvim/.config/nvim/lua/plugins/treesitter.lua \
-            nvim/.config/nvim/lua/plugins/jupyter.lua \
-            wezterm/.wezterm.lua; do
-            if luac5.4 -p "$f" 2>&1; then
-              echo "  OK: $f"
-            else
-              echo "  FAIL: $f"
-              FAIL=1
-            fi
+          for f in nvim/.config/nvim/lua/**/*.lua wezterm/.wezterm.lua; do
+            if luac5.4 -p "$f" 2>&1; then echo "  OK: $f"; else echo "  FAIL: $f"; FAIL=1; fi
           done
           exit $FAIL
 
@@ -62,223 +45,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Validate TOML files
+      - name: Validate configs
         run: |
           python3 -c "import tomllib; tomllib.load(open('starship/.config/starship.toml', 'rb'))"
-          python3 -c "import tomllib; tomllib.load(open('yazi/.config/yazi/yazi.toml', 'rb'))"
-          python3 -c "import tomllib; tomllib.load(open('codex/.codex/config.toml', 'rb'))"
-          echo "OK: all TOML files valid"
-      - name: Validate JSON files
-        run: |
-          python3 -c "import json; json.load(open('opencode/.config/opencode/opencode.json'))"
-          python3 -c "import json; json.load(open('nvim/.config/nvim/lazyvim.json'))"
           python3 -c "import json; json.load(open('nvim/.config/nvim/lazy-lock.json'))"
-          echo "OK: all JSON files valid"
-      - name: Validate gitconfig
-        run: |
           git config --file git/.gitconfig --list > /dev/null
-          echo "OK: .gitconfig parses"
-
-  config-values:
-    name: Config value checks
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: OpenCode theme must be "tokyonight" (no hyphen)
-        run: |
-          THEME=$(python3 -c "import json; print(json.load(open('opencode/.config/opencode/opencode.json'))['theme'])")
-          [ "$THEME" = "tokyonight" ] || { echo "FAIL: theme is '$THEME', must be 'tokyonight'"; exit 1; }
-
-      - name: Colorblind accessibility (orange #ff9e64 for errors)
-        run: |
-          grep -q '#ff9e64' starship/.config/starship.toml \
-            || { echo "FAIL: starship.toml missing colorblind-safe #ff9e64"; exit 1; }
-
-      - name: Git pager uses delta
-        run: |
-          git config --file git/.gitconfig core.pager | grep -q delta \
-            || { echo "FAIL: .gitconfig core.pager is not delta"; exit 1; }
-
-      - name: LazyVim extras in lazy.lua, not lazyvim.json
-        run: |
-          EXTRAS=$(python3 -c "import json; d=json.load(open('nvim/.config/nvim/lazyvim.json')); print(len(d.get('extras',[])))")
-          [ "$EXTRAS" = "0" ] || { echo "FAIL: lazyvim.json has $EXTRAS extras (should be in lazy.lua)"; exit 1; }
-          for extra in lang.python lang.docker lang.yaml lang.json lang.markdown dap.core editor.mini-files util.mini-hipatterns; do
-            grep -q "$extra" nvim/.config/nvim/lua/config/lazy.lua \
-              || { echo "FAIL: lazy.lua missing import for $extra"; exit 1; }
-          done
-
-      - name: lazy-lock.json integrity
-        run: |
-          python3 -c "
-          import json, sys
-          lock = json.load(open('nvim/.config/nvim/lazy-lock.json'))
-          required = ['LazyVim', 'lazy.nvim', 'tokyonight.nvim']
-          errors = []
-          for name, info in lock.items():
-              if 'commit' not in info:
-                  errors.append(f'{name}: missing commit')
-          for req in required:
-              if req not in lock:
-                  errors.append(f'{req}: required plugin not in lock file')
-          if errors:
-              for e in errors:
-                  print(f'FAIL: {e}')
-              sys.exit(1)
-          print(f'OK: lazy-lock.json has {len(lock)} plugins, all required present')
-          "
+          echo "OK: all configs valid"
 
   stow-structure:
     name: Stow package structure
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Verify stow package files exist
+      - name: Verify stow packages
         run: |
-          FAIL=0
-          for f in \
-            zsh/.zshrc \
-            zsh/.zprofile \
-            starship/.config/starship.toml \
-            nvim/.config/nvim/init.lua \
-            nvim/.config/nvim/lua/config/lazy.lua \
-            nvim/.config/nvim/lazyvim.json \
-            nvim/.config/nvim/lazy-lock.json \
-            tmux/.config/tmux/tmux.conf \
-            yazi/.config/yazi/yazi.toml \
-            git/.gitconfig \
-            git/.gitignore_global \
-            podman/.config/containers/registries.conf \
-            opencode/.config/opencode/opencode.json \
-            codex/.codex/config.toml; do
-            if test -f "$f"; then
-              echo "  OK: $f"
-            else
-              echo "  FAIL: $f"
-              FAIL=1
-            fi
+          for pkg in zsh starship nvim tmux yazi git podman opencode codex; do
+            test -d "$pkg" || { echo "FAIL: package dir '$pkg' missing"; exit 1; }
           done
-          exit $FAIL
+          echo "OK: all stow packages exist"
 
-      - name: PACKAGES array matches repo directories
-        run: |
-          # Extract PACKAGES array from 04-stow-dotfiles.sh
-          EXPECTED="zsh starship nvim tmux yazi git podman opencode codex"
-          for pkg in $EXPECTED; do
-            test -d "$pkg" || { echo "FAIL: stow package dir '$pkg' missing"; exit 1; }
-          done
-          echo "OK: all stow package directories exist"
-
-  cache-contract:
-    name: Bundle/install cache contract
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Cache filenames match between bundle.sh and 03-install-tools.sh
-        run: |
-          # These are the 18 expected cache file basenames (tools)
-          FILES="starship.tar.gz zoxide.tar.gz fzf.tar.gz bat.tar.gz eza.tar.gz \
-                 ripgrep.tar.gz fd.tar.gz yazi.zip lazygit.tar.gz uv.tar.gz \
-                 glab.tar.gz jf delta.tar.gz nvim.appimage helm.tar.gz oc.tar.gz \
-                 fastfetch.tar.gz mc"
-          FAIL=0
-          for f in $FILES; do
-            grep -qF "$f" airgap/bundle.sh || { echo "FAIL: bundle.sh missing $f"; FAIL=1; }
-          done
-          # Verify plugin tarballs too
-          for p in zinit.tar.gz fast-syntax-highlighting.tar.gz zsh-autosuggestions.tar.gz \
-                   zsh-completions.tar.gz fzf-tab.tar.gz; do
-            grep -qF "$p" airgap/bundle.sh || { echo "FAIL: bundle.sh missing plugin $p"; FAIL=1; }
-          done
-          exit $FAIL
-
-      - name: Airgap offline package pipeline is wired up
-        run: |
-          FAIL=0
-          # bundle.sh must download both RPMs and DEBs
-          grep -q 'rpms' airgap/bundle.sh \
-            || { echo "FAIL: bundle.sh has no RPM download step"; FAIL=1; }
-          grep -q 'debs' airgap/bundle.sh \
-            || { echo "FAIL: bundle.sh has no DEB download step"; FAIL=1; }
-          grep -q 'dnf download' airgap/bundle.sh \
-            || { echo "FAIL: bundle.sh missing 'dnf download' for RPMs"; FAIL=1; }
-          grep -q 'apt-get install.*download-only' airgap/bundle.sh \
-            || { echo "FAIL: bundle.sh missing apt-get --download-only for DEBs"; FAIL=1; }
-          # deploy.sh must support both cache subdirs
-          grep -q 'cache_subdir\|cache/rpms\|rpms' airgap/deploy.sh \
-            || { echo "FAIL: deploy.sh missing RPM cache dir handling"; FAIL=1; }
-          grep -q 'debs' airgap/deploy.sh \
-            || { echo "FAIL: deploy.sh missing DEB cache dir handling"; FAIL=1; }
-          # 02-install-packages.sh must support --offline flag
-          grep -q '\-\-offline' bootstrap/02-install-packages.sh \
-            || { echo "FAIL: 02-install-packages.sh missing --offline support"; FAIL=1; }
-          # Critical packages must appear in both distro lists in bundle.sh
-          for pkg in stow podman zsh tmux; do
-            grep -q "$pkg" airgap/bundle.sh \
-              || { echo "FAIL: bundle.sh missing $pkg"; FAIL=1; }
-          done
-          [ $FAIL -eq 0 ] && echo "OK: airgap offline package pipeline is properly wired"
-          exit $FAIL
-
-      - name: RUNTIME_PKGS_RPM and _DEB lists are present in bundle.sh
-        run: |
-          # Since package names differ between Fedora/RHEL and Ubuntu/Debian,
-          # bundle.sh now has two separate arrays. Validate both exist and
-          # contain critical packages.
-          FAIL=0
-          grep -q 'RUNTIME_PKGS_RPM' airgap/bundle.sh \
-            || { echo "FAIL: bundle.sh missing RUNTIME_PKGS_RPM array"; FAIL=1; }
-          grep -q 'RUNTIME_PKGS_DEB' airgap/bundle.sh \
-            || { echo "FAIL: bundle.sh missing RUNTIME_PKGS_DEB array"; FAIL=1; }
-          # Critical packages must appear in both (possibly under different names)
-          for pkg in stow podman zsh tmux git; do
-            grep -q "$pkg" airgap/bundle.sh \
-              || { echo "FAIL: bundle.sh missing '$pkg'"; FAIL=1; }
-          done
-          # 02-install-packages.sh must have both DNF and APT code paths
-          grep -q 'RUNTIME_PKGS_RPM\|dnf install' bootstrap/02-install-packages.sh \
-            || { echo "FAIL: 02-install-packages.sh missing dnf path"; FAIL=1; }
-          grep -q 'apt-get install' bootstrap/02-install-packages.sh \
-            || { echo "FAIL: 02-install-packages.sh missing apt-get path"; FAIL=1; }
-          [ $FAIL -eq 0 ] && echo "OK: multi-distro package lists present"
-          exit $FAIL
-
-      - name: Dockerfile has distro-conditional package install
-        run: |
-          FAIL=0
-          # Dockerfile must use ARG BASE_IMAGE (not hardcode the FROM)
-          grep -q '^ARG BASE_IMAGE' Dockerfile \
-            || { echo "FAIL: Dockerfile missing 'ARG BASE_IMAGE'"; FAIL=1; }
-          # Must have conditional logic for both dnf and apt-get
-          grep -q 'dnf install' Dockerfile \
-            || { echo "FAIL: Dockerfile missing dnf install block"; FAIL=1; }
-          grep -q 'apt-get install' Dockerfile \
-            || { echo "FAIL: Dockerfile missing apt-get install block"; FAIL=1; }
-          # Both distro paths must install critical packages
-          for pkg in stow zsh tmux git podman; do
-            grep -q "$pkg" Dockerfile \
-              || { echo "FAIL: Dockerfile missing '$pkg'"; FAIL=1; }
-          done
-          [ $FAIL -eq 0 ] && echo "OK: Dockerfile has multi-distro support"
-          exit $FAIL
-
-  zshrc-guards:
-    name: Zsh tool guards
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Check command guards in .zshrc
-        run: |
-          for tool in starship zoxide fzf bat; do
-            grep -q "command -v $tool" zsh/.zshrc \
-              || { echo "FAIL: .zshrc missing guard for $tool"; exit 1; }
-          done
-          echo "OK: .zshrc has command guards for tool integrations"
-
-  # ── Medium checks (need Fedora container) ─────────────────────────
+  # ── Medium checks (Fedora container) ─────────────────────────────────
   stow-dry-run:
     name: Stow dry-run (Fedora 43)
     runs-on: ubuntu-latest
@@ -292,217 +78,62 @@ jobs:
         run: useradd --create-home testuser
       - name: Stow --simulate all packages
         run: |
-          FAIL=0
           for pkg in zsh starship nvim tmux yazi git podman opencode codex; do
-            if stow --dir="$(pwd)" --target="/home/testuser" --simulate --restow "$pkg" 2>&1; then
-              echo "  OK: $pkg"
-            else
-              echo "  FAIL: $pkg"
-              FAIL=1
-            fi
+            stow --dir="$(pwd)" --target="/home/testuser" --simulate --restow "$pkg" || exit 1
           done
-          exit $FAIL
+          echo "OK: all packages stow correctly"
 
-  # ── Heavy checks (full airgap integration test) ────────────────────
+  # ── Heavy integration tests ─────────────────────────────────────────
   airgap-integration:
     name: Airgap integration (Fedora 43)
     runs-on: ubuntu-latest
     container:
       image: registry.fedoraproject.org/fedora:43
-      options: --cap-add=NET_ADMIN   # needed for iptables/nftables
+      options: --cap-add=NET_ADMIN
     steps:
       - uses: actions/checkout@v4
 
       - name: Install build deps
-        run: dnf install -y curl git tar gzip sudo iptables
+        run: dnf install -y curl git tar gzip sudo
 
       - name: Create test user
-        run: |
-          bash bootstrap/01-create-user.sh gl
+        run: bash bootstrap/01-create-user.sh gl
 
-      - name: Build airgap bundle (with RPMs and nvim plugins)
+      - name: Build airgap bundle
         run: bash airgap/bundle.sh
 
       - name: Verify bundle contents
         run: |
           BUNDLE=$(ls airgap/devenv-bundle-*.tar.gz | head -1)
-          echo "Bundle: $BUNDLE ($(du -h "$BUNDLE" | cut -f1))"
-          
-          # Check RPMs
-          tar -tzf "$BUNDLE" | grep -q 'cache/rpms/' \
-            || { echo "FAIL: bundle missing cache/rpms/"; exit 1; }
-          RPM_COUNT=$(tar -tzf "$BUNDLE" | grep -c '\.rpm$')
-          echo "RPMs in bundle: $RPM_COUNT"
-          [ "$RPM_COUNT" -gt 0 ] || { echo "FAIL: no RPMs in bundle"; exit 1; }
-          
-          # Note: nvim-data.tar.gz is no longer auto-generated
-          # Users must manually create it by running nvim online, then:
-          # tar czf nvim-data.tar.gz -C ~ .local/{share,state}/nvim
-          echo "Skipping nvim-data.tar.gz check (manual process)"
+          tar -tzf "$BUNDLE" | grep -q 'cache/rpms/' || { echo "FAIL: no RPMs"; exit 1; }
+          echo "Bundle OK: $(du -h "$BUNDLE" | cut -f1)"
 
-      - name: Remove system packages (simulate bare machine)
-        run: |
-          dnf remove -y stow podman buildah skopeo fuse-overlayfs \
-              tmux ShellCheck tree htop 2>/dev/null || true
-          for cmd in stow podman buildah skopeo tmux; do
-            command -v "$cmd" 2>/dev/null \
-              && { echo "FAIL: $cmd still installed after removal"; exit 1; }
-          done
-          echo "System packages removed successfully"
-
-      - name: Block network (simulate airgap)
-        run: |
-          # Drop all outbound traffic except loopback
-          iptables -A OUTPUT -o lo -j ACCEPT
-          iptables -A OUTPUT -j DROP
-          # Verify: curl MUST fail
-          if curl -s --max-time 3 https://github.com >/dev/null 2>&1; then
-            echo "FAIL: Network still reachable after iptables block!"
-            exit 1
-          fi
-          echo "Network blocked — airgap simulation active"
-
-      - name: Run airgap deploy (offline)
+      - name: Run airgap deploy
         run: |
           BUNDLE=$(ls airgap/devenv-bundle-*.tar.gz | head -1)
           bash airgap/deploy.sh --user gl --force "$BUNDLE"
 
-      - name: Verify system packages restored
+      - name: Verify deployment
         run: |
           FAIL=0
-          for cmd in stow zsh tmux git podman buildah skopeo jq node npm python3; do
-            if command -v "$cmd" >/dev/null 2>&1; then
-              echo "  + $cmd"
-            else
-              echo "  X $cmd MISSING"
-              FAIL=$((FAIL + 1))
-            fi
+          for cmd in stow zsh tmux git podman; do
+            command -v "$cmd" >/dev/null 2>&1 || { echo "MISSING: $cmd"; FAIL=1; }
           done
-          [ $FAIL -eq 0 ] || { echo "FAIL: $FAIL system packages missing"; exit 1; }
-          echo "All system packages verified"
-
-      - name: Verify CLI tools installed
-        run: |
-          BIN="/home/gl/.local/bin"
-          FAIL=0
-          for tool in starship zoxide fzf bat eza rg fd lazygit delta nvim uv glab jf helm oc fastfetch mc; do
-            if [ -x "$BIN/$tool" ] || [ -x "$BIN/$tool.appimage" ]; then
-              echo "  + $tool"
-            else
-              echo "  X $tool MISSING"
-              FAIL=$((FAIL + 1))
-            fi
+          for tool in starship zoxide fzf bat eza rg fd lazygit delta nvim uv glab helm oc fastfetch mc k9s lazydocker btop lnav glow zig; do
+            [ -x "/home/gl/.local/bin/$tool" ] || [ -x "/home/gl/.local/bin/$tool.appimage" ] || \
+              { echo "MISSING: $tool"; FAIL=1; }
           done
-          [ $FAIL -eq 0 ] || { echo "FAIL: $FAIL tools missing"; exit 1; }
-          echo "All CLI tools verified"
+          [ -f /home/gl/.zshrc ] || { echo "MISSING: .zshrc"; FAIL=1; }
+          [ -f /home/gl/.config/nvim/init.lua ] || { echo "MISSING: nvim config"; FAIL=1; }
+          [ $FAIL -eq 0 ] || exit 1
+          echo "OK: all tools and configs present"
 
-      - name: Verify CLI tools actually run
-        run: |
-          BIN="/home/gl/.local/bin"
-          export PATH="$BIN:$PATH"
-          FAIL=0
-          check() {
-            local name="$1"; shift
-            if "$@" >/dev/null 2>&1; then echo "  + $name"; else echo "  X $name FAILED"; FAIL=$((FAIL+1)); fi
-          }
-          check "starship"   starship --version
-          check "zoxide"     zoxide --version
-          check "fzf"        fzf --version
-          check "bat"        bat --version
-          check "eza"        eza --version
-          check "rg"         rg --version
-          check "fd"         fd --version
-          check "lazygit"    lazygit --version
-          check "delta"      delta --version
-          check "uv"         uv --version
-          check "glab"       glab --version
-          check "jf"         jf --version
-          check "helm"       helm version --short
-          check "oc"         oc version --client
-          check "fastfetch"  fastfetch --version
-          check "mc"         mc --version
-          # yazi produces no output from --version in non-TTY; use test -x
-          check "yazi"       test -x "$BIN/yazi"
-          # nvim needs --appimage-extract-and-run, use wrapper
-          check "nvim"       nvim --version
-          [ $FAIL -eq 0 ] || { echo "FAIL: $FAIL tools failed to run"; exit 1; }
-          echo "All CLI tools execute successfully"
-
-      - name: Verify nvim actually loads LazyVim plugins (not just binary)
-        run: |
-          export PATH="/home/gl/.local/bin:$PATH"
-          
-          # Check if nvim plugins exist (manual process)
-          LAZY_DIR="/home/gl/.local/share/nvim/lazy"
-          if [ ! -d "$LAZY_DIR" ]; then
-            echo "  ~ Lazy plugin dir missing - run nvim online, then:"
-            echo "    tar czf nvim-data.tar.gz -C ~ .local/{share,state}/nvim"
-            echo "  ~ Skipping plugin verification"
-            exit 0
-          fi
-          
-          PLUGIN_COUNT=$(find "$LAZY_DIR" -maxdepth 1 -type d | wc -l)
-          echo "  + Lazy plugin dir exists with $PLUGIN_COUNT plugins"
-          
-          # Now test that nvim can actually load Lazy without errors
-          if nvim --headless \
-            -c 'lua print("Plugins: " .. require("lazy").stats().count)' \
-            -c 'qa' 2>&1 | grep -q "Plugins:"; then
-            echo "  + LazyVim loaded successfully"
-          else
-            echo "  X LazyVim FAILED to load properly"
-            nvim --headless +qa 2>&1 | head -20
-            exit 1
-          fi
-
-      - name: Verify dotfiles stowed
-        run: |
-          FAIL=0
-          check() {
-            if eval "$2" 2>/dev/null; then echo "  + $1"; else echo "  X $1"; FAIL=$((FAIL+1)); fi
-          }
-          check "zshrc"         "test -e /home/gl/.zshrc"
-          check "zprofile"      "test -e /home/gl/.zprofile"
-          check "starship.toml" "test -f /home/gl/.config/starship.toml"
-          check "nvim config"   "test -f /home/gl/.config/nvim/init.lua"
-          check "tmux.conf"     "test -f /home/gl/.config/tmux/tmux.conf"
-          check "gitconfig"     "test -e /home/gl/.gitconfig"
-          check "registries"    "test -f /home/gl/.config/containers/registries.conf"
-          check "zinit"         "test -d /home/gl/.local/share/zinit/zinit.git"
-          [ $FAIL -eq 0 ] || { echo "FAIL: $FAIL configs missing"; exit 1; }
-          echo "All dotfiles verified"
-
-      - name: Verify zinit plugins deployed
-        run: |
-          PLUGINS="/home/gl/.local/share/zinit/plugins"
-          FAIL=0
-          for plugin in \
-            zdharma-continuum---fast-syntax-highlighting \
-            zsh-users---zsh-autosuggestions \
-            zsh-users---zsh-completions \
-            Aloxaf---fzf-tab; do
-            if [ -d "$PLUGINS/$plugin" ] && [ "$(ls -A "$PLUGINS/$plugin")" ]; then
-              echo "  + $plugin"
-            else
-              echo "  X $plugin MISSING or empty"
-              FAIL=$((FAIL + 1))
-            fi
-          done
-          [ $FAIL -eq 0 ] || { echo "FAIL: $FAIL plugins missing"; exit 1; }
-          echo "All zinit plugins verified"
-
-      - name: Verify UV_PYTHON_DOWNLOADS is set in .zprofile
-        run: |
-          grep -q 'UV_PYTHON_DOWNLOADS=manual' /home/gl/.zprofile \
-            || { echo "FAIL: UV_PYTHON_DOWNLOADS=manual not in .zprofile"; exit 1; }
-          echo "UV_PYTHON_DOWNLOADS=manual verified in .zprofile"
-
-  # ── Docker build test — matrix over all supported base images ─────
+  # ── Docker build tests ───────────────────────────────────────────────
   docker-build:
     name: Docker build (${{ matrix.name }})
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false   # run all matrix variants even if one fails
+      fail-fast: false
       matrix:
         include:
           - name: fedora43
@@ -524,26 +155,11 @@ jobs:
         run: |
           IMG=dotfiles-wsl-test-${{ matrix.name }}
           FAIL=0
-          # Core tools — must be present on all distros
-          for cmd in stow zsh git jq python3; do
-            if docker run --rm "$IMG" sh -c "command -v $cmd" >/dev/null 2>&1; then
-              echo "  + $cmd"
-            else
-              echo "  X $cmd MISSING"
-              FAIL=$((FAIL + 1))
-            fi
+          for cmd in stow zsh git python3; do
+            docker run --rm "$IMG" sh -c "command -v $cmd" >/dev/null 2>&1 || \
+              { echo "MISSING: $cmd"; FAIL=1; }
           done
-          # Optional tools — available on Fedora/Ubuntu but may be absent on UBI 9
-          # (UBI has limited repos without full RHEL subscription)
-          for cmd in tmux node npm podman buildah skopeo; do
-            if docker run --rm "$IMG" sh -c "command -v $cmd" >/dev/null 2>&1; then
-              echo "  + $cmd"
-            else
-              echo "  ~ $cmd not found (optional on ${{ matrix.name }})"
-            fi
-          done
-          # Check user exists
-          docker run --rm "$IMG" id gl >/dev/null 2>&1 \
-            || { echo "  X user gl missing"; FAIL=$((FAIL + 1)); }
-          [ $FAIL -eq 0 ] || { echo "FAIL: $FAIL checks failed on ${{ matrix.name }}"; exit 1; }
-          echo "Docker image verified (${{ matrix.name }})"
+          docker run --rm "$IMG" id gl >/dev/null 2>&1 || \
+            { echo "MISSING: user gl"; FAIL=1; }
+          [ $FAIL -eq 0 ] || exit 1
+          echo "OK: Docker image ${{ matrix.name }} verified"

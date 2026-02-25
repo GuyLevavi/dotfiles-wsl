@@ -73,10 +73,18 @@ resolve_versions() {
     FASTFETCH_VERSION="${FASTFETCH_VERSION:-$(gh_latest fastfetch-cli/fastfetch)}"
     MC_VERSION="${MC_VERSION:-$(gh_latest minio/mc)}"  # date-based: RELEASE.YYYY-MM-DDT...
     MARIMO_VERSION="${MARIMO_VERSION:-}"               # empty = latest via uv
+    # New TUI tools
+    K9S_VERSION="${K9S_VERSION:-$(gh_latest derailed/k9s)}"
+    LAZYDOCKER_VERSION="${LAZYDOCKER_VERSION:-$(gh_latest jesseduffield/lazydocker)}"
+    BTOP_VERSION="${BTOP_VERSION:-$(gh_latest aristocratos/btop)}"
+    LNAV_VERSION="${LNAV_VERSION:-$(gh_latest tstack/lnav)}"
+    GLOW_VERSION="${GLOW_VERSION:-$(gh_latest charmbracelet/glow)}"
+    # Zig C compiler
+    ZIG_VERSION="${ZIG_VERSION:-$(gh_latest ziglang/zig)}"
 }
 
-# Python versions to install via uv
-PYTHON_VERSIONS="${PYTHON_VERSIONS:-3.9 3.10 3.11 3.12 3.13}"
+# Python versions to install via uv (3.10 and 3.11)
+PYTHON_VERSIONS="${PYTHON_VERSIONS:-3.10 3.11}"
 
 # Guard: allow sourcing for version variables without running main
 if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
@@ -134,11 +142,91 @@ gh_tool() {
 # ===== Print resolved versions =====
 echo ""
 echo "Versions:"
-for v in STARSHIP ZOXIDE FZF BAT EZA RIPGREP FD YAZI LAZYGIT DELTA NEOVIM UV GLAB JFROG_CLI HELM OC FASTFETCH MC; do
+for v in STARSHIP ZOXIDE FZF BAT EZA RIPGREP FD YAZI LAZYGIT DELTA NEOVIM UV GLAB JFROG_CLI HELM OC FASTFETCH MC K9S LAZYDOCKER BTOP LNAV GLOW ZIG; do
     var="${v}_VERSION"
     printf "  %-14s %s\n" "$v" "${!var}"
 done
 echo ""
+
+# ===== New TUI tools =====
+
+# k9s — Kubernetes TUI
+echo "==> k9s ${K9S_VERSION}"
+fetch "${TMP}/k9s.tar.gz" "https://github.com/derailed/k9s/releases/download/v${K9S_VERSION}/k9s_linux_amd64.tar.gz"
+mkdir -p "${TMP}/k9s" && tar -xzf "${TMP}/k9s.tar.gz" -C "${TMP}/k9s"
+install -m 0755 "${TMP}/k9s/k9s" "${BIN}/k9s"
+
+# lazydocker — Docker/Podman TUI
+echo "==> lazydocker ${LAZYDOCKER_VERSION}"
+fetch "${TMP}/lazydocker.tar.gz" "https://github.com/jesseduffield/lazydocker/releases/download/v${LAZYDOCKER_VERSION}/lazydocker_${LAZYDOCKER_VERSION}_Linux_x86_64.tar.gz"
+mkdir -p "${TMP}/lazydocker" && tar -xzf "${TMP}/lazydocker.tar.gz" -C "${TMP}/lazydocker"
+install -m 0755 "${TMP}/lazydocker/lazydocker" "${BIN}/lazydocker"
+
+# btop — Resource monitor
+echo "==> btop ${BTOP_VERSION}"
+fetch "${TMP}/btop.tar.gz" "https://github.com/aristocratos/btop/releases/download/v${BTOP_VERSION}/btop-x86_64-linux.tbz"
+mkdir -p "${TMP}/btop" && tar -xjf "${TMP}/btop.tar.gz" -C "${TMP}/btop"
+install -m 0755 "${TMP}/btop/btop/btop" "${BIN}/btop"
+
+# lnav — Log navigator
+echo "==> lnav ${LNAV_VERSION}"
+fetch "${TMP}/lnav.zip" "https://github.com/tstack/lnav/releases/download/v${LNAV_VERSION}/lnav-${LNAV_VERSION}-x86_64-linux-musl.zip"
+unzip -qo "${TMP}/lnav.zip" -d "${TMP}/lnav"
+install -m 0755 "${TMP}/lnav/lnav-${LNAV_VERSION}/lnav" "${BIN}/lnav"
+
+# glow — Markdown renderer
+echo "==> glow ${GLOW_VERSION}"
+fetch "${TMP}/glow.tar.gz" "https://github.com/charmbracelet/glow/releases/download/v${GLOW_VERSION}/glow_${GLOW_VERSION}_Linux_x86_64.tar.gz"
+mkdir -p "${TMP}/glow" && tar -xzf "${TMP}/glow.tar.gz" -C "${TMP}/glow"
+install -m 0755 "${TMP}/glow/glow" "${BIN}/glow"
+
+# ===== zig cc — Standalone C compiler =====
+echo "==> zig ${ZIG_VERSION}"
+fetch "${TMP}/zig.tar.gz" "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz"
+mkdir -p "${TMP}/zig" && tar -xf "${TMP}/zig.tar.gz" -C "${TMP}/zig" --strip-components=1
+install -m 0755 "${TMP}/zig/zig" "${BIN}/zig"
+
+# ===== Python tools (uv-based) =====
+
+# harlequin — SQL TUI client with database adapters
+echo "==> harlequin (uv tool install)"
+if $OFFLINE; then
+    if [[ -d "${CACHE}/wheels" ]]; then
+        uv tool install --find-links "${CACHE}/wheels" harlequin 2>/dev/null || \
+            echo "   Skipped (wheels present but install failed)"
+    else
+        echo "   Skipped (no wheels in cache)"
+    fi
+else
+    # Install with common database adapters
+    uv tool install 'harlequin[postgres,mysql,sqlite]' 2>/dev/null || uv tool install harlequin
+fi
+
+# posting — HTTP client TUI
+echo "==> posting (uv tool install)"
+if $OFFLINE; then
+    if [[ -d "${CACHE}/wheels" ]]; then
+        uv tool install --find-links "${CACHE}/wheels" posting 2>/dev/null || \
+            echo "   Skipped (wheels present but install failed)"
+    else
+        echo "   Skipped (no wheels in cache)"
+    fi
+else
+    uv tool install posting
+fi
+
+# jupyter and jupytext
+echo "==> jupyter and jupytext (uv tool install)"
+if $OFFLINE; then
+    if [[ -d "${CACHE}/wheels" ]]; then
+        uv tool install --find-links "${CACHE}/wheels" jupyter jupytext 2>/dev/null || \
+            echo "   Skipped (wheels present but install failed)"
+    else
+        echo "   Skipped (no wheels in cache)"
+    fi
+else
+    uv tool install jupyter jupytext
+fi
 
 # ===== Install tools =====
 
@@ -252,12 +340,38 @@ else
 fi
 uv python list --only-installed 2>/dev/null || true
 
+# pytest — required for neotest-python in nvim
+echo "==> pytest (for nvim neotest)"
+if $OFFLINE; then
+    if [[ -d "${CACHE}/wheels" ]]; then
+        # Try to install from wheels
+        uv tool install --find-links "${CACHE}/wheels" pytest 2>/dev/null || \
+            echo "   Skipped (wheels present but install failed)"
+    else
+        echo "   Install manually in each Python venv: pip install pytest"
+    fi
+else
+    # Install pytest in each Python version for neotest-python
+    for py_ver in $PYTHON_VERSIONS; do
+        uv pip install --python ${py_ver} pytest 2>/dev/null || true
+    done
+    # Also install as uv tool for global access
+    uv tool install pytest || true
+fi
+
 # marimo — reactive Python notebooks
 echo "==> marimo ${MARIMO_VERSION:-latest}"
 if $OFFLINE; then
-    [[ -d "${CACHE}/marimo-wheels" ]] && \
-        uv tool install --find-links "${CACHE}/marimo-wheels" "marimo==${MARIMO_VERSION}" || \
+    # Try marimo-specific wheels first, then general wheels
+    if [[ -d "${CACHE}/marimo-wheels" ]]; then
+        uv tool install --find-links "${CACHE}/marimo-wheels" "marimo==${MARIMO_VERSION}" 2>/dev/null || \
+            echo "   Skipped (marimo wheels present but install failed)"
+    elif [[ -d "${CACHE}/wheels" ]]; then
+        uv tool install --find-links "${CACHE}/wheels" marimo 2>/dev/null || \
+            echo "   Skipped (wheels present but install failed)"
+    else
         echo "   Skipped (no offline wheels found)"
+    fi
 else
     if [[ -n "${MARIMO_VERSION:-}" ]]; then
         uv tool install "marimo==${MARIMO_VERSION}"

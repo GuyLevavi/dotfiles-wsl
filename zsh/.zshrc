@@ -238,6 +238,26 @@ alias k="kubectl"
 alias kgp="kubectl get pods"
 alias oc="oc"
 alias hm="helm"
+alias k9="k9s"
+
+# System monitoring
+alias top="btop"
+alias htop="btop"
+
+# Docker/Podman TUI
+alias lzd="lazydocker"
+
+# Log navigator
+alias logs="lnav"
+
+# Markdown viewer
+alias md="glow"
+
+# SQL TUI
+alias sql="harlequin"
+
+# HTTP client TUI
+alias http="posting"
 
 # -----------------------------------------------------------------------------
 #  Environment variables

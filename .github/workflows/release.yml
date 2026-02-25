@@ -8,7 +8,7 @@ permissions:
   contents: write
 
 jobs:
-  # ── Build bundle tarball on Fedora (canonical build host) ──────────
+  # ── Build and publish bundle tarball ────────────────────────────────
   release:
     name: Build & publish
     runs-on: ubuntu-latest

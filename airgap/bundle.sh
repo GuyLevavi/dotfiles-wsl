@@ -73,6 +73,16 @@ download "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable-${OC_
 download "https://github.com/fastfetch-cli/fastfetch/releases/download/${FASTFETCH_VERSION}/fastfetch-linux-amd64.tar.gz" fastfetch.tar.gz
 download "https://dl.min.io/client/mc/release/linux-amd64/archive/mc.${MC_VERSION}" mc
 
+# New TUI tools
+download "https://github.com/derailed/k9s/releases/download/v${K9S_VERSION}/k9s_linux_amd64.tar.gz" k9s.tar.gz
+download "https://github.com/jesseduffield/lazydocker/releases/download/v${LAZYDOCKER_VERSION}/lazydocker_${LAZYDOCKER_VERSION}_Linux_x86_64.tar.gz" lazydocker.tar.gz
+download "https://github.com/aristocratos/btop/releases/download/v${BTOP_VERSION}/btop-x86_64-linux.tbz" btop.tbz
+download "https://github.com/tstack/lnav/releases/download/v${LNAV_VERSION}/lnav-${LNAV_VERSION}-x86_64-linux-musl.zip" lnav.zip
+download "https://github.com/charmbracelet/glow/releases/download/v${GLOW_VERSION}/glow_${GLOW_VERSION}_Linux_x86_64.tar.gz" glow.tar.gz
+
+# Zig C compiler
+download "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" zig.tar.xz
+
 # ===== System packages (RPMs or DEBs depending on host distro) =====
 # Download RUNTIME_PKGS so they can be installed offline.
 # Must be run on the target distro family (Fedora/RHEL for RPMs, Ubuntu/Debian for DEBs).
@@ -159,6 +169,32 @@ else
     warn "Bundle must be created on a Fedora/RHEL or Ubuntu/Debian host"
 fi
 
+# ===== Python wheels for airgap (optional) =====
+# Tools like harlequin, posting, marimo need their deps bundled for offline install
+echo ""
+log "Python wheels (optional - for offline uv tool install)"
+WHEEL_DIR="${CACHE}/wheels"
+if command -v pip3 &>/dev/null && ! $DRY_RUN; then
+    mkdir -p "$WHEEL_DIR"
+    echo "  Downloading wheels for Python tools..."
+    # Core tools that need bundling
+    pip3 download harlequin --only-binary :all: -d "$WHEEL_DIR" 2>/dev/null || true
+    pip3 download harlequin-postgres --only-binary :all: -d "$WHEEL_DIR" 2>/dev/null || true
+    pip3 download harlequin-mysql --only-binary :all: -d "$WHEEL_DIR" 2>/dev/null || true
+    pip3 download posting --only-binary :all: -d "$WHEEL_DIR" 2>/dev/null || true
+    pip3 download marimo --only-binary :all: -d "$WHEEL_DIR" 2>/dev/null || true
+    pip3 download pytest --only-binary :all: -d "$WHEEL_DIR" 2>/dev/null || true
+    WHEEL_COUNT=$(ls "$WHEEL_DIR"/*.whl 2>/dev/null | wc -l)
+    if [[ $WHEEL_COUNT -gt 0 ]]; then
+        ok "wheels/ ($WHEEL_COUNT wheels downloaded)"
+    else
+        echo "  ~ No wheels downloaded (pip may not be available or tools have no wheels)"
+    fi
+else
+    echo "  ~ pip3 not available, skipping wheel download"
+    echo "  ~ To bundle wheels manually: pip download <tool> -d airgap/cache/wheels/"
+fi
+
 # ===== Zsh plugins =====
 echo ""
 log "Zsh plugins"
@@ -204,6 +240,12 @@ oc              ${OC_VERSION}
 fastfetch       ${FASTFETCH_VERSION}
 mc              ${MC_VERSION}
 marimo          ${MARIMO_VERSION}
+k9s             ${K9S_VERSION}
+lazydocker      ${LAZYDOCKER_VERSION}
+btop            ${BTOP_VERSION}
+lnav            ${LNAV_VERSION}
+glow            ${GLOW_VERSION}
+zig             ${ZIG_VERSION}
 EOF
     ok "versions.lock"
 fi
