@@ -18,19 +18,27 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install build deps
-        run: dnf install -y curl git tar gzip nodejs npm # nodejs for tree-sitter-cli
+        run: dnf install -y curl git tar gzip
 
-      - name: Create test user and setup environment
+      - name: Try to prepare nvim plugins (airgap cache)
+        id: nvim_prep
+        continue-on-error: true
         run: |
-          useradd --create-home --shell /bin/bash testuser
+          echo "Attempting to prepare nvim data in CI..."
+          
+          # Create minimal user environment
+          useradd --create-home --shell /bin/bash testuser 2>/dev/null || true
           mkdir -p /home/testuser/.local/bin /home/testuser/.config
           
           # Download nvim AppImage
           curl -L -o /home/testuser/.local/bin/nvim.appimage \
-            "https://github.com/neovim/neovim/releases/download/v0.11.0/nvim-linux-x86_64.appimage"
+            "https://github.com/neovim/neovim/releases/download/v0.11.0/nvim-linux-x86_64.appimage" 2>/dev/null || {
+            echo "Failed to download nvim"
+            exit 1
+          }
           chmod +x /home/testuser/.local/bin/nvim.appimage
           
-          # Create nvim wrapper
+          # Create wrapper
           cat > /home/testuser/.local/bin/nvim << 'EOF'
           #!/bin/bash
           exec /home/testuser/.local/bin/nvim.appimage --appimage-extract-and-run "$@"
@@ -41,57 +49,62 @@ jobs:
           cp -r nvim/.config/nvim /home/testuser/.config/
           chown -R testuser:testuser /home/testuser
           
-          echo "export PATH=/home/testuser/.local/bin:$PATH" >> /home/testuser/.bashrc
-
-      - name: Prepare nvim plugins (airgap cache)
-        run: |
-          cd /home/testuser
-          export HOME=/home/testuser
-          export PATH=/home/testuser/.local/bin:$PATH
-          
-          # Run prep-nvim.sh as testuser
-          su - testuser -c "cd /home/testuser && bash $GITHUB_WORKSPACE/airgap/prep-nvim.sh" || {
-            echo "WARNING: prep-nvim.sh failed, nvim data will not be included"
-            # Continue anyway - partial bundle is better than no bundle
-          }
-          
-          # Copy nvim data to workspace cache if it was created
-          if [[ -f airgap/cache/nvim-data.tar.gz ]]; then
-            cp airgap/cache/nvim-data.tar.gz $GITHUB_WORKSPACE/airgap/cache/
-            echo "✓ nvim-data.tar.gz created"
+          # Try to run prep-nvim.sh
+          if su - testuser -c "export PATH=/home/testuser/.local/bin:\$PATH && export HOME=/home/testuser && bash $GITHUB_WORKSPACE/airgap/prep-nvim.sh" 2>/dev/null; then
+            echo "prep-nvim.sh succeeded"
+            if [[ -f /home/testuser/.local/share/nvim-data.tar.gz ]]; then
+              cp /home/testuser/.local/share/nvim-data.tar.gz airgap/cache/ 2>/dev/null || true
+            fi
+            echo "nvim_prep_success=true" >> $GITHUB_OUTPUT
           else
-            echo "! nvim-data.tar.gz not created (nvim prep may have failed)"
+            echo "prep-nvim.sh failed (non-critical)"
+            echo "nvim_prep_success=false" >> $GITHUB_OUTPUT
           fi
-        working-directory: /home/testuser
 
       - name: Build airgap bundle
         run: |
           bash airgap/bundle.sh
           ls -lh airgap/devenv-bundle-*.tar.gz
           echo ""
-          echo "Bundle contents:"
-          tar -tzf airgap/devenv-bundle-*.tar.gz | head -20
-          echo "..."
-          echo ""
-          echo "Total size: $(du -h airgap/devenv-bundle-*.tar.gz | cut -f1)"
+          echo "Bundle size: $(du -h airgap/devenv-bundle-*.tar.gz | cut -f1)"
 
-      - name: Create release and upload bundle
+      - name: Create release and upload assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
           dnf install -y gh
+          
           BUNDLE=$(ls airgap/devenv-bundle-*.tar.gz | head -1)
           TAG="${GITHUB_REF_NAME}"
+          BUNDLE_SIZE=$(du -h "$BUNDLE" | cut -f1)
           
-          # Create release with bundle
+          # Create or update release
           gh release create "$TAG" "$BUNDLE" \
             --title "$TAG" \
-            --generate-notes \
-            || gh release upload "$TAG" "$BUNDLE" --clobber
+            --notes-file - << EOF
+Airgap dev environment bundle
+
+**Contents:**
+- 25+ CLI tools (binaries)
+- System packages for detected distro
+- Zsh plugins
+- Configuration files
+
+**Size:** ${BUNDLE_SIZE}
+
+**Note on nvim plugins:**
+The nvim plugin data (LazyVim plugins, Mason LSPs, treesitter parsers) 
+requires running nvim interactively. If not included in this bundle, 
+generate locally with:
+
+    bash airgap/docker-prep-nvim.sh
+
+See RUNAI.md and docs/DISTRO_COMPATIBILITY.md for more info.
+EOF
           
-          # Also upload nvim-data separately if it exists
+          # Also upload nvim data if it was created
           if [[ -f airgap/cache/nvim-data.tar.gz ]]; then
-            echo "Uploading nvim-data.tar.gz separately..."
+            echo "Uploading nvim-data.tar.gz..."
             gh release upload "$TAG" airgap/cache/nvim-data.tar.gz --clobber || true
           fi
