@@ -38,6 +38,8 @@ download() {
         return
     fi
     [[ -f "$dest" ]] && { skip "$file"; return; }
+    # Debug: show URL for lazydocker
+    [[ "$file" == "lazydocker.tar.gz" ]] && echo "DEBUG: Downloading from: $url" >&2
     curl -fSL --retry 3 -o "$dest" "$url" && ok "$file"
 }
 
