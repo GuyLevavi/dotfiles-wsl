@@ -20,47 +20,6 @@ jobs:
       - name: Install build deps
         run: dnf install -y curl git tar gzip
 
-      - name: Try to prepare nvim plugins (airgap cache)
-        id: nvim_prep
-        continue-on-error: true
-        run: |
-          echo "Attempting to prepare nvim data in CI..."
-          
-          # Create minimal user environment
-          useradd --create-home --shell /bin/bash testuser 2>/dev/null || true
-          mkdir -p /home/testuser/.local/bin /home/testuser/.config
-          
-          # Download nvim AppImage
-          curl -L -o /home/testuser/.local/bin/nvim.appimage \
-            "https://github.com/neovim/neovim/releases/download/v0.11.0/nvim-linux-x86_64.appimage" 2>/dev/null || {
-            echo "Failed to download nvim"
-            exit 1
-          }
-          chmod +x /home/testuser/.local/bin/nvim.appimage
-          
-          # Create wrapper
-          cat > /home/testuser/.local/bin/nvim << 'EOF'
-          #!/bin/bash
-          exec /home/testuser/.local/bin/nvim.appimage --appimage-extract-and-run "$@"
-          EOF
-          chmod +x /home/testuser/.local/bin/nvim
-          
-          # Copy nvim config
-          cp -r nvim/.config/nvim /home/testuser/.config/
-          chown -R testuser:testuser /home/testuser
-          
-          # Try to run prep-nvim.sh
-          if su - testuser -c "export PATH=/home/testuser/.local/bin:\$PATH && export HOME=/home/testuser && bash $GITHUB_WORKSPACE/airgap/prep-nvim.sh" 2>/dev/null; then
-            echo "prep-nvim.sh succeeded"
-            if [[ -f /home/testuser/.local/share/nvim-data.tar.gz ]]; then
-              cp /home/testuser/.local/share/nvim-data.tar.gz airgap/cache/ 2>/dev/null || true
-            fi
-            echo "nvim_prep_success=true" >> $GITHUB_OUTPUT
-          else
-            echo "prep-nvim.sh failed (non-critical)"
-            echo "nvim_prep_success=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Build airgap bundle
         run: |
           bash airgap/bundle.sh
@@ -68,7 +27,7 @@ jobs:
           echo ""
           echo "Bundle size: $(du -h airgap/devenv-bundle-*.tar.gz | cut -f1)"
 
-      - name: Create release and upload assets
+      - name: Create release and upload bundle
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
@@ -78,19 +37,15 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           BUNDLE_SIZE=$(du -h "$BUNDLE" | cut -f1)
           
-          # Create simple release notes
+          # Create release notes
           echo "Airgap dev environment bundle ($BUNDLE_SIZE)" > /tmp/notes.txt
           echo "" >> /tmp/notes.txt
           echo "Contents: 25+ CLI tools, system packages, zsh plugins, configs" >> /tmp/notes.txt
           echo "" >> /tmp/notes.txt
-          echo "Note: If nvim plugins not included, run: bash airgap/docker-prep-nvim.sh" >> /tmp/notes.txt
-          echo "See RUNAI.md and docs/DISTRO_COMPATIBILITY.md for more info." >> /tmp/notes.txt
+          echo "Note: Generate nvim plugin data locally:" >> /tmp/notes.txt
+          echo "  bash airgap/docker-prep-nvim.sh" >> /tmp/notes.txt
+          echo "" >> /tmp/notes.txt
+          echo "See docs/DISTRO_COMPATIBILITY.md for more info." >> /tmp/notes.txt
           
           # Create or update release
           gh release create "$TAG" "$BUNDLE" --title "$TAG" --notes-file /tmp/notes.txt || gh release upload "$TAG" "$BUNDLE" --clobber
-          
-          # Also upload nvim data if it was created
-          if [[ -f airgap/cache/nvim-data.tar.gz ]]; then
-            echo "Uploading nvim-data.tar.gz..."
-            gh release upload "$TAG" airgap/cache/nvim-data.tar.gz --clobber || true
-          fi
