@@ -13,15 +13,6 @@ source "${SCRIPT_DIR}/../bootstrap/03-install-tools.sh"
 # Resolve versions now (bundle.sh is executed, not sourced)
 resolve_versions
 
-# Debug: print tool versions
-echo ""
-echo "DEBUG: Tool versions after resolve:"
-echo "  K9S_VERSION=${K9S_VERSION:-unset}"
-echo "  LAZYDOCKER_VERSION=${LAZYDOCKER_VERSION:-unset}"
-echo "  LAZYDOCKER_URL=https://github.com/jesseduffield/lazydocker/releases/download/v${LAZYDOCKER_VERSION}/lazydocker_${LAZYDOCKER_VERSION}_Linux_x86_64.tar.gz"
-echo "  BTOP_VERSION=${BTOP_VERSION:-unset}"
-echo ""
-
 DRY_RUN=false
 [[ "${1:-}" == "--dry-run" ]] && DRY_RUN=true
 
@@ -30,7 +21,7 @@ ok()   { echo "  + $*"; }
 skip() { echo "  . $* (cached)"; }
 warn() { echo "  ! $*" >&2; }
 
-# download URL FILENAME — fetch into cache, skip if exists
+# download URL FILENAME — fetch into cache, skip if exists, allow failure
 download() {
     local url="$1" file="$2" dest="${CACHE}/$2"
     if $DRY_RUN; then
@@ -38,12 +29,11 @@ download() {
         return
     fi
     [[ -f "$dest" ]] && { skip "$file"; return; }
-    # Debug: verbose download for lazydocker
-    if [[ "$file" == "lazydocker.tar.gz" ]]; then
-        echo "DEBUG: Downloading lazydocker..." >&2
-        curl -v -fSL --retry 3 -o "$dest" "$url" 2>&1 | head -30 >&2 && ok "$file" || { echo "DEBUG: curl exit code: $?" >&2; return 1; }
+    if curl -fSL --retry 3 -o "$dest" "$url" 2>/dev/null; then
+        ok "$file"
     else
-        curl -fSL --retry 3 -o "$dest" "$url" && ok "$file"
+        warn "$file download failed (skipping)"
+        return 0  # Continue even if download fails
     fi
 }
 
