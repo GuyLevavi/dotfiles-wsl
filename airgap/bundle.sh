@@ -13,6 +13,14 @@ source "${SCRIPT_DIR}/../bootstrap/03-install-tools.sh"
 # Resolve versions now (bundle.sh is executed, not sourced)
 resolve_versions
 
+# Debug: print tool versions
+echo ""
+echo "DEBUG: Tool versions after resolve:"
+echo "  K9S_VERSION=${K9S_VERSION:-unset}"
+echo "  LAZYDOCKER_VERSION=${LAZYDOCKER_VERSION:-unset}"
+echo "  BTOP_VERSION=${BTOP_VERSION:-unset}"
+echo ""
+
 DRY_RUN=false
 [[ "${1:-}" == "--dry-run" ]] && DRY_RUN=true
 
@@ -183,7 +191,6 @@ if command -v pip3 &>/dev/null && ! $DRY_RUN; then
     # Core tools that need bundling
     pip3 download harlequin --only-binary :all: -d "$WHEEL_DIR" 2>/dev/null || true
     pip3 download harlequin-postgres --only-binary :all: -d "$WHEEL_DIR" 2>/dev/null || true
-    pip3 download harlequin-mysql --only-binary :all: -d "$WHEEL_DIR" 2>/dev/null || true
     pip3 download posting --only-binary :all: -d "$WHEEL_DIR" 2>/dev/null || true
     pip3 download marimo --only-binary :all: -d "$WHEEL_DIR" 2>/dev/null || true
     pip3 download pytest --only-binary :all: -d "$WHEEL_DIR" 2>/dev/null || true
