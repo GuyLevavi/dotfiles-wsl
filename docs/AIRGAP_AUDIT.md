@@ -41,7 +41,7 @@ This document lists all tools, CLI binaries, nvim plugins, and their offline/air
 
 | Tool | Install Method | Dependencies | Offline Strategy |
 |------|----------------|----------------|------------------|
-| harlequin | uv tool install | Needs adapters: postgres, mysql, sqlite, mongodb, redis | Install with extras: `uv tool install 'harlequin[postgres,mysql]'` |
+| harlequin | uv tool install | Needs adapters: postgres, sqlite | Install with extras: `uv tool install 'harlequin[postgres,sqlite]'` |
 | posting | uv tool install | Pure Python, may need certifi/ssl | `uv tool install posting` caches all deps |
 | marimo | uv tool install | Pure Python + dependencies | `uv tool install marimo` caches all deps |
 | jupyter | uv tool install | Pure Python + many deps | `uv tool install jupyter` caches all deps |
@@ -57,14 +57,14 @@ mkdir -p airgap/cache/wheels
 # Install tools and copy wheels from uv cache
 cd airgap/cache/wheels
 uv tool install harlequin --python 3.11
-uv tool install 'harlequin[postgres,mysql,sqlite]'
+uv tool install 'harlequin[postgres,sqlite]'
 
 # Extract wheels from uv cache
 cp -r ~/.cache/uv/wheels/*.whl ./ 2>/dev/null || true
 
 # Alternative: pip download (more reliable for airgap)
 pip download harlequin --no-deps -d ./
-pip download harlequin-postgres harlequin-mysql -d ./
+pip download harlequin harlequin-postgres -d ./
 ```
 
 ---
@@ -243,7 +243,7 @@ bash airgap/prep-nvim.sh
 
 # 3. Optional: Pre-install Python tools with wheels
 mkdir -p airgap/cache/wheels
-pip download harlequin[postgres,mysql,sqlite] -d airgap/cache/wheels/
+pip download 'harlequin[postgres,sqlite]' -d airgap/cache/wheels/
 pip download posting jupyter jupytext pytest -d airgap/cache/wheels/
 
 # 4. Create bundle

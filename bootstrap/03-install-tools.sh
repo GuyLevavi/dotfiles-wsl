@@ -100,14 +100,20 @@ CACHE="${SCRIPT_DIR}/../airgap/cache"
 OFFLINE=false
 [[ "${1:-}" == "--offline" ]] && OFFLINE=true
 
-# In offline mode, read pinned versions from the lock file
-if $OFFLINE && [[ -f "${CACHE}/versions.lock" ]]; then
-    echo "==> Reading pinned versions from versions.lock"
-    while IFS=$' \t' read -r name ver; do
-        [[ "$name" =~ ^#.*$ || -z "$name" ]] && continue
-        varname="$(echo "${name^^}" | tr '-' '_')_VERSION"
-        declare "${varname}=${ver}"
-    done < "${CACHE}/versions.lock"
+# In offline mode, try to read pinned versions from the lock file
+# If no lock file exists, resolve latest versions (requires network or pre-cached tarballs)
+if $OFFLINE; then
+    if [[ -f "${CACHE}/versions.lock" ]]; then
+        echo "==> Reading pinned versions from versions.lock"
+        while IFS=$' \t' read -r name ver; do
+            [[ "$name" =~ ^#.*$ || -z "$name" ]] && continue
+            varname="$(echo "${name^^}" | tr '-' '_')_VERSION"
+            declare "${varname}=${ver}"
+        done < "${CACHE}/versions.lock"
+    else
+        echo "==> No versions.lock found, resolving latest versions..."
+        resolve_versions
+    fi
 else
     resolve_versions
 fi

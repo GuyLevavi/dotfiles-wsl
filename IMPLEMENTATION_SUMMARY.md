@@ -41,14 +41,14 @@ I've thoroughly audited all tools, CLI binaries, and nvim plugins for offline/ai
 
 | Tool | Status | Strategy |
 |------|--------|----------|
-| harlequin | ⚠️ Needs wheels | Bundle with `pip download harlequin[postgres,mysql,sqlite]` |
+| harlequin | ⚠️ Needs wheels | Bundle with `pip download 'harlequin[postgres,sqlite]'` |
 | posting | ⚠️ Needs wheels | Bundle via pip download |
 | marimo | ⚠️ Needs wheels | Bundle via pip download |
 | jupyter | ⚠️ Needs wheels | Bundle via pip download |
 | jupytext | ⚠️ Needs wheels | Bundle via pip download |
 | pytest | ⚠️ Needs wheels | Required for neotest-python |
 
-**Key Finding**: harlequin requires adapters installed as extras: `harlequin[postgres,mysql,sqlite,mongodb,redis]`
+**Key Finding**: harlequin requires adapters installed as extras: `harlequin[postgres,sqlite]`
 
 ---
 
@@ -151,7 +151,7 @@ bash airgap/bundle.sh
 bash airgap/prep-nvim.sh
 
 # 3. Optional: Download Python wheels for tools
-pip3 download harlequin[postgres,mysql,sqlite] -d airgap/cache/wheels/
+pip3 download 'harlequin[postgres,sqlite]' -d airgap/cache/wheels/
 pip3 download posting marimo jupyter jupytext pytest -d airgap/cache/wheels/
 
 # 4. Create bundle
@@ -245,7 +245,7 @@ Before taking bundle to airgap:
 
 - [ ] Run `bash airgap/bundle.sh` successfully
 - [ ] Run `bash airgap/prep-nvim.sh` to create nvim-data.tar.gz
-- [ ] (Optional) Download Python wheels: `pip download harlequin[postgres,mysql,sqlite] -d airgap/cache/wheels/`
+- [ ] (Optional) Download Python wheels: `pip download 'harlequin[postgres,sqlite]' -d airgap/cache/wheels/`
 - [ ] Verify bundle contains: 25+ binaries, RPMs/DEBs, zsh plugins, nvim data
 - [ ] Test bundle size: should be 200-500MB depending on nvim plugins
 - [ ] Create release tag: `git tag v1.7.0 && git push origin v1.7.0`

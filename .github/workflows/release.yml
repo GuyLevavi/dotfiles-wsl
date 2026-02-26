@@ -8,9 +8,9 @@ permissions:
   contents: write
 
 jobs:
-  # ── Build and publish bundle tarball ────────────────────────────────
-  release:
-    name: Build & publish
+  # ── Build Fedora bundle ────────────────────────────────
+  build-fedora:
+    name: Build Fedora bundle
     runs-on: ubuntu-latest
     container:
       image: registry.fedoraproject.org/fedora:43
@@ -20,32 +20,111 @@ jobs:
       - name: Install build deps
         run: dnf install -y curl git tar gzip
 
-      - name: Build airgap bundle
+      - name: Build Fedora airgap bundle
         run: |
           bash airgap/bundle.sh
           ls -lh airgap/devenv-bundle-*.tar.gz
           echo ""
           echo "Bundle size: $(du -h airgap/devenv-bundle-*.tar.gz | cut -f1)"
 
-      - name: Create release and upload bundle
+      - name: Rename bundle for distro
+        run: |
+          BUNDLE=$(ls airgap/devenv-bundle-*.tar.gz | head -1)
+          mv "$BUNDLE" "${BUNDLE%.tar.gz}-fedora.tar.gz"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-fedora
+          path: airgap/devenv-bundle-*-fedora.tar.gz
+
+  # ── Build Ubuntu bundle ────────────────────────────────
+  build-ubuntu:
+    name: Build Ubuntu bundle
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build deps
+        run: |
+          apt-get update
+          apt-get install -y curl git tar gzip
+
+      - name: Build Ubuntu airgap bundle
+        run: |
+          bash airgap/bundle.sh
+          ls -lh airgap/devenv-bundle-*.tar.gz
+          echo ""
+          echo "Bundle size: $(du -h airgap/devenv-bundle-*.tar.gz | cut -f1)"
+
+      - name: Rename bundle for distro
+        run: |
+          BUNDLE=$(ls airgap/devenv-bundle-*.tar.gz | head -1)
+          mv "$BUNDLE" "${BUNDLE%.tar.gz}-ubuntu.tar.gz"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-ubuntu
+          path: airgap/devenv-bundle-*-ubuntu.tar.gz
+
+  # ── Create release with both bundles ───────────────────
+  release:
+    name: Create release
+    needs: [build-fedora, build-ubuntu]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bundle-*
+          merge-multiple: true
+          path: ./bundles
+
+      - name: List bundles
+        run: ls -lh ./bundles/
+
+      - name: Create release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
-          dnf install -y gh
-          BUNDLE=$(ls airgap/devenv-bundle-*.tar.gz | head -1)
           TAG="${GITHUB_REF_NAME}"
-          BUNDLE_SIZE=$(du -h "$BUNDLE" | cut -f1)
           
           # Create release notes
-          echo "Airgap dev environment bundle ($BUNDLE_SIZE)" > /tmp/notes.txt
-          echo "" >> /tmp/notes.txt
-          echo "Contents: 25+ CLI tools, system packages, zsh plugins, configs" >> /tmp/notes.txt
-          echo "" >> /tmp/notes.txt
-          echo "Note: Generate nvim plugin data locally:" >> /tmp/notes.txt
-          echo "  bash airgap/docker-prep-nvim.sh" >> /tmp/notes.txt
-          echo "" >> /tmp/notes.txt
-          echo "See docs/DISTRO_COMPATIBILITY.md for more info." >> /tmp/notes.txt
+          cat > /tmp/notes.txt << 'EOF'
+          ## Airgap Dev Environment Bundles
           
-          # Create or update release
-          gh release create "$TAG" "$BUNDLE" --title "$TAG" --notes-file /tmp/notes.txt || gh release upload "$TAG" "$BUNDLE" --clobber
+          Choose the bundle matching your target distro:
+          
+          - **Fedora 43**: `devenv-bundle-*-fedora.tar.gz`
+          - **Ubuntu 24.04**: `devenv-bundle-*-ubuntu.tar.gz`
+          
+          ### Contents
+          - 25+ CLI tools (latest versions)
+          - System packages (RPMs for Fedora, DEBs for Ubuntu)
+          - zsh plugins and dotfiles configs
+          - nvim AppImage (universal)
+          
+          ### Usage
+          ```bash
+          # Extract and deploy
+          tar -xzf devenv-bundle-*-ubuntu.tar.gz
+          sudo bash airgap/deploy.sh --offline devenv-bundle-*-ubuntu.tar.gz
+          ```
+          
+          ### Note on nvim plugins
+          nvim plugin data is portable across x86_64 Linux distros.
+          Generate locally if needed:
+          ```bash
+          bash airgap/docker-prep-nvim.sh
+          ```
+          EOF
+          
+          # Create or update release with both bundles
+          gh release create "$TAG" ./bundles/*.tar.gz \
+            --title "$TAG" \
+            --notes-file /tmp/notes.txt \
+            || gh release upload "$TAG" ./bundles/*.tar.gz --clobber

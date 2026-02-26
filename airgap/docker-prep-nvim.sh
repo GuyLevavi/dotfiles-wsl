@@ -7,21 +7,21 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DISTRO="${1:-fedora}"
+DISTRO="${1:-ubuntu}"
 BUNDLE_PATH="${2:-}"
 CACHE="${SCRIPT_DIR}/cache"
 mkdir -p "$CACHE"
 
 echo "==> Building nvim data bundle using Docker ($DISTRO)"
+echo "    Default is now Ubuntu (for RunAI). Use 'fedora' arg for Fedora."
 echo "    This will take 5-10 minutes..."
 echo ""
 
 # Determine base image
 case "$DISTRO" in
     fedora)    BASE_IMAGE="registry.fedoraproject.org/fedora:43" ;;
-    ubi9)      BASE_IMAGE="registry.access.redhat.com/ubi9/ubi:latest" ;;
     ubuntu)    BASE_IMAGE="ubuntu:24.04" ;;
-    *)         echo "ERROR: Unknown distro: $DISTRO (use: fedora, ubi9, ubuntu)"; exit 1 ;;
+    *)         echo "ERROR: Unknown distro: $DISTRO (use: fedora, ubuntu)"; exit 1 ;;
 esac
 
 # Find bundle if not specified
