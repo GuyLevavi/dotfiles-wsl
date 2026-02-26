@@ -38,9 +38,13 @@ download() {
         return
     fi
     [[ -f "$dest" ]] && { skip "$file"; return; }
-    # Debug: show URL for lazydocker
-    [[ "$file" == "lazydocker.tar.gz" ]] && echo "DEBUG: Downloading from: $url" >&2
-    curl -fSL --retry 3 -o "$dest" "$url" && ok "$file"
+    # Debug: verbose download for lazydocker
+    if [[ "$file" == "lazydocker.tar.gz" ]]; then
+        echo "DEBUG: Downloading lazydocker..." >&2
+        curl -v -fSL --retry 3 -o "$dest" "$url" 2>&1 | head -30 >&2 && ok "$file" || { echo "DEBUG: curl exit code: $?" >&2; return 1; }
+    else
+        curl -fSL --retry 3 -o "$dest" "$url" && ok "$file"
+    fi
 }
 
 # clone_shallow REPO TARBALL — shallow clone, tar, cache
