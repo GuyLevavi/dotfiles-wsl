@@ -18,12 +18,62 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install build deps
-        run: dnf install -y curl git tar gzip
+        run: dnf install -y curl git tar gzip nodejs npm # nodejs for tree-sitter-cli
+
+      - name: Create test user and setup environment
+        run: |
+          useradd --create-home --shell /bin/bash testuser
+          mkdir -p /home/testuser/.local/bin /home/testuser/.config
+          
+          # Download nvim AppImage
+          curl -L -o /home/testuser/.local/bin/nvim.appimage \
+            "https://github.com/neovim/neovim/releases/download/v0.11.0/nvim-linux-x86_64.appimage"
+          chmod +x /home/testuser/.local/bin/nvim.appimage
+          
+          # Create nvim wrapper
+          cat > /home/testuser/.local/bin/nvim << 'EOF'
+          #!/bin/bash
+          exec /home/testuser/.local/bin/nvim.appimage --appimage-extract-and-run "$@"
+          EOF
+          chmod +x /home/testuser/.local/bin/nvim
+          
+          # Copy nvim config
+          cp -r nvim/.config/nvim /home/testuser/.config/
+          chown -R testuser:testuser /home/testuser
+          
+          echo "export PATH=/home/testuser/.local/bin:$PATH" >> /home/testuser/.bashrc
+
+      - name: Prepare nvim plugins (airgap cache)
+        run: |
+          cd /home/testuser
+          export HOME=/home/testuser
+          export PATH=/home/testuser/.local/bin:$PATH
+          
+          # Run prep-nvim.sh as testuser
+          su - testuser -c "cd /home/testuser && bash $GITHUB_WORKSPACE/airgap/prep-nvim.sh" || {
+            echo "WARNING: prep-nvim.sh failed, nvim data will not be included"
+            # Continue anyway - partial bundle is better than no bundle
+          }
+          
+          # Copy nvim data to workspace cache if it was created
+          if [[ -f airgap/cache/nvim-data.tar.gz ]]; then
+            cp airgap/cache/nvim-data.tar.gz $GITHUB_WORKSPACE/airgap/cache/
+            echo "✓ nvim-data.tar.gz created"
+          else
+            echo "! nvim-data.tar.gz not created (nvim prep may have failed)"
+          fi
+        working-directory: /home/testuser
 
       - name: Build airgap bundle
         run: |
           bash airgap/bundle.sh
           ls -lh airgap/devenv-bundle-*.tar.gz
+          echo ""
+          echo "Bundle contents:"
+          tar -tzf airgap/devenv-bundle-*.tar.gz | head -20
+          echo "..."
+          echo ""
+          echo "Total size: $(du -h airgap/devenv-bundle-*.tar.gz | cut -f1)"
 
       - name: Create release and upload bundle
         env:
@@ -33,7 +83,15 @@ jobs:
           dnf install -y gh
           BUNDLE=$(ls airgap/devenv-bundle-*.tar.gz | head -1)
           TAG="${GITHUB_REF_NAME}"
+          
+          # Create release with bundle
           gh release create "$TAG" "$BUNDLE" \
             --title "$TAG" \
             --generate-notes \
             || gh release upload "$TAG" "$BUNDLE" --clobber
+          
+          # Also upload nvim-data separately if it exists
+          if [[ -f airgap/cache/nvim-data.tar.gz ]]; then
+            echo "Uploading nvim-data.tar.gz separately..."
+            gh release upload "$TAG" airgap/cache/nvim-data.tar.gz --clobber || true
+          fi
