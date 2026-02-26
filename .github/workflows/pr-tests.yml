@@ -138,8 +138,6 @@ jobs:
         include:
           - name: fedora43
             base_image: registry.fedoraproject.org/fedora:43
-          - name: ubi9
-            base_image: registry.access.redhat.com/ubi9/ubi:latest
           - name: ubuntu2404
             base_image: ubuntu:24.04
     steps:
