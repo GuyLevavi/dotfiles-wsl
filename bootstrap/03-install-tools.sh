@@ -73,14 +73,14 @@ resolve_versions() {
     FASTFETCH_VERSION="${FASTFETCH_VERSION:-$(gh_latest fastfetch-cli/fastfetch)}"
     MC_VERSION="${MC_VERSION:-$(gh_latest minio/mc)}"  # date-based: RELEASE.YYYY-MM-DDT...
     MARIMO_VERSION="${MARIMO_VERSION:-}"               # empty = latest via uv
-    # New TUI tools
-    K9S_VERSION="${K9S_VERSION:-$(gh_latest derailed/k9s)}"
-    LAZYDOCKER_VERSION="${LAZYDOCKER_VERSION:-$(gh_latest jesseduffield/lazydocker)}"
-    BTOP_VERSION="${BTOP_VERSION:-$(gh_latest aristocratos/btop)}"
-    LNAV_VERSION="${LNAV_VERSION:-$(gh_latest tstack/lnav)}"
-    GLOW_VERSION="${GLOW_VERSION:-$(gh_latest charmbracelet/glow)}"
-    # Zig C compiler
-    ZIG_VERSION="${ZIG_VERSION:-$(gh_latest ziglang/zig)}"
+    # New TUI tools — with fallback versions for CI/API rate limits
+    K9S_VERSION="${K9S_VERSION:-$(gh_latest derailed/k9s 0.40.5)}"
+    LAZYDOCKER_VERSION="${LAZYDOCKER_VERSION:-$(gh_latest jesseduffield/lazydocker 0.24.4)}"
+    BTOP_VERSION="${BTOP_VERSION:-$(gh_latest aristocratos/btop 1.4.0)}"
+    LNAV_VERSION="${LNAV_VERSION:-$(gh_latest tstack/lnav 0.12.0)}"
+    GLOW_VERSION="${GLOW_VERSION:-$(gh_latest charmbracelet/glow 2.0.0)}"
+    # Zig C compiler — with fallback version
+    ZIG_VERSION="${ZIG_VERSION:-$(gh_latest ziglang/zig 0.13.0)}"
 }
 
 # Python versions to install via uv (3.10 and 3.11)
@@ -198,8 +198,8 @@ if $OFFLINE; then
         echo "   Skipped (no wheels in cache)"
     fi
 else
-    # Install with common database adapters
-    uv tool install 'harlequin[postgres,mysql,sqlite]' 2>/dev/null || uv tool install harlequin
+    # Install with postgres and sqlite adapters (officially supported)
+    uv tool install 'harlequin[postgres,sqlite]' 2>/dev/null || uv tool install harlequin
 fi
 
 # posting — HTTP client TUI
