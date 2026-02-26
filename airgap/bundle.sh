@@ -18,6 +18,7 @@ echo ""
 echo "DEBUG: Tool versions after resolve:"
 echo "  K9S_VERSION=${K9S_VERSION:-unset}"
 echo "  LAZYDOCKER_VERSION=${LAZYDOCKER_VERSION:-unset}"
+echo "  LAZYDOCKER_URL=https://github.com/jesseduffield/lazydocker/releases/download/v${LAZYDOCKER_VERSION}/lazydocker_${LAZYDOCKER_VERSION}_Linux_x86_64.tar.gz"
 echo "  BTOP_VERSION=${BTOP_VERSION:-unset}"
 echo ""
 
