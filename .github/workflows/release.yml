@@ -79,29 +79,29 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           BUNDLE_SIZE=$(du -h "$BUNDLE" | cut -f1)
           
-          # Create or update release
-          gh release create "$TAG" "$BUNDLE" \
-            --title "$TAG" \
-            --notes-file - << EOF
+          # Create simple release notes file
+          cat > /tmp/release_notes.txt << 'NOTES'
 Airgap dev environment bundle
 
 **Contents:**
 - 25+ CLI tools (binaries)
 - System packages for detected distro
-- Zsh plugins
+- Zsh plugins  
 - Configuration files
 
-**Size:** ${BUNDLE_SIZE}
-
 **Note on nvim plugins:**
-The nvim plugin data (LazyVim plugins, Mason LSPs, treesitter parsers) 
-requires running nvim interactively. If not included in this bundle, 
-generate locally with:
-
+The nvim plugin data requires running nvim interactively.
+If not included in this bundle, generate locally with:
     bash airgap/docker-prep-nvim.sh
 
 See RUNAI.md and docs/DISTRO_COMPATIBILITY.md for more info.
-EOF
+NOTES
+          
+          # Create or update release
+          gh release create "$TAG" "$BUNDLE" \
+            --title "$TAG" \
+            --notes-file /tmp/release_notes.txt \
+            || gh release upload "$TAG" "$BUNDLE" --clobber
           
           # Also upload nvim data if it was created
           if [[ -f airgap/cache/nvim-data.tar.gz ]]; then
