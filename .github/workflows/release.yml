@@ -74,34 +74,20 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           dnf install -y gh
-          
           BUNDLE=$(ls airgap/devenv-bundle-*.tar.gz | head -1)
           TAG="${GITHUB_REF_NAME}"
           BUNDLE_SIZE=$(du -h "$BUNDLE" | cut -f1)
           
-          # Create simple release notes file
-          cat > /tmp/release_notes.txt << 'NOTES'
-Airgap dev environment bundle
-
-**Contents:**
-- 25+ CLI tools (binaries)
-- System packages for detected distro
-- Zsh plugins  
-- Configuration files
-
-**Note on nvim plugins:**
-The nvim plugin data requires running nvim interactively.
-If not included in this bundle, generate locally with:
-    bash airgap/docker-prep-nvim.sh
-
-See RUNAI.md and docs/DISTRO_COMPATIBILITY.md for more info.
-NOTES
+          # Create simple release notes
+          echo "Airgap dev environment bundle ($BUNDLE_SIZE)" > /tmp/notes.txt
+          echo "" >> /tmp/notes.txt
+          echo "Contents: 25+ CLI tools, system packages, zsh plugins, configs" >> /tmp/notes.txt
+          echo "" >> /tmp/notes.txt
+          echo "Note: If nvim plugins not included, run: bash airgap/docker-prep-nvim.sh" >> /tmp/notes.txt
+          echo "See RUNAI.md and docs/DISTRO_COMPATIBILITY.md for more info." >> /tmp/notes.txt
           
           # Create or update release
-          gh release create "$TAG" "$BUNDLE" \
-            --title "$TAG" \
-            --notes-file /tmp/release_notes.txt \
-            || gh release upload "$TAG" "$BUNDLE" --clobber
+          gh release create "$TAG" "$BUNDLE" --title "$TAG" --notes-file /tmp/notes.txt || gh release upload "$TAG" "$BUNDLE" --clobber
           
           # Also upload nvim data if it was created
           if [[ -f airgap/cache/nvim-data.tar.gz ]]; then
