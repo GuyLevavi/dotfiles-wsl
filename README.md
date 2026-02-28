@@ -6,21 +6,39 @@ A reproducible, portable terminal development environment for Python computer vi
 
 ---
 
-## Quick Start (Online)
+## Quick Start (Docker - Recommended for Airgap)
+
+```bash
+# Build airgap bundle (online machine)
+git clone https://github.com/GuyLevavi/dotfiles-wsl.git
+cd dotfiles-wsl
+bash airgap/bundle.sh
+# → Creates airgap/devenv-bundle-YYYYMMDD.tar.gz
+
+# Transfer bundle to airgapped network, then build Docker image
+docker build -f Dockerfile.airgap-final -t airgap-dev .
+
+# Run container without network access
+docker run --network none -it airgap-dev zsh
+```
+
+---
+
+## Quick Start (WSL - Online)
 
 ```bash
 # 1. Install WezTerm on Windows, copy config
 cp wezterm/.wezterm.lua ~
 
-# 2. Install Fedora WSL2
+# 2. Install Fedora WSL2 (or Ubuntu)
 powershell -File bootstrap/00-install-fedora-wsl.ps1
 
 # 3. Inside WSL, setup as root
-sudo bash bootstrap/01-create-user.sh myuser
+sudo bash bootstrap/01-create-user.sh gl
 wsl --shutdown
 
 # 4. Login as new user, clone and setup
-git clone <repo-url> ~/dotfiles && cd ~/dotfiles
+git clone https://github.com/GuyLevavi/dotfiles-wsl.git ~/dotfiles && cd ~/dotfiles
 sudo bash bootstrap/02-install-packages.sh
 bash bootstrap/03-install-tools.sh
 bash bootstrap/04-stow-dotfiles.sh
@@ -35,12 +53,12 @@ exec zsh
 ```
 Online PC                    Airgapped Network
 ───────────                  ─────────────────
-1. git clone                3. Transfer tarball
-2. bash airgap/bundle.sh    4. bash airgap/deploy.sh bundle.tar.gz
+1. git clone                3. Transfer bundle tarball
+2. bash airgap/bundle.sh    4. Build & run Docker image
    → devenv-bundle-*.tar.gz
 ```
 
-**Bundle includes:** 25+ CLI tools, system packages, zsh plugins, nvim plugins.
+**Bundle includes:** 25+ CLI tools, system packages, zsh plugins, nvim plugins, Python wheels.
 
 ---
 
@@ -96,22 +114,60 @@ When working in the airgapped container, all Neovim plugins and tools are pre-in
 
 ## Docker Images
 
-| Base | Tag |
-|------|-----|
-| Fedora 43 | `ghcr.io/guylevavi/dotfiles-wsl:latest` |
-| RHEL/UBI 9 | `ghcr.io/guylevavi/dotfiles-wsl:latest-ubi9` |
-| Ubuntu 24.04 | `ghcr.io/guylevavi/dotfiles-wsl:latest-ubuntu2404` |
+| Image | Description | Use Case |
+|-------|-------------|----------|
+| `ghcr.io/guylevavi/airgap-dev:latest` | Pre-built airgap image | Run directly without building |
+| `Dockerfile.airgap-final` | Build from bundle | Custom builds with your bundle |
 
-**Usage:**
+**Build and run:**
 ```bash
-# With airgap bundle
-docker run -it --rm \
-  -v /path/to/bundle.tar.gz:/bundle.tar.gz \
-  ghcr.io/guylevavi/dotfiles-wsl:latest \
-  bash airgap/deploy.sh --user gl --force /bundle.tar.gz
+# Build locally
+docker build -f Dockerfile.airgap-final -t airgap-dev:latest .
 
-# Layer on corporate base image (see RUNAI.md)
+# Run with port forwarding for marimo/jupyter
+docker run -it -p 2718:2718 -p 8888:8888 airgap-dev:latest zsh
+
+# Run completely offline (no network)
+docker run --network none -it airgap-dev:latest zsh
 ```
+
+---
+
+## Marimo & Jupyter in Docker
+
+When running the airgap-dev container, expose ports to access marimo/jupyter from your browser:
+
+```bash
+# Start container with port forwarding
+docker run -it -p 2718:2718 -p 8888:8888 airgap-dev:latest zsh
+
+# Inside container, start marimo tutorial
+marimo tutorial intro --host 0.0.0.0 --port 2718
+
+# Or start marimo edit mode
+marimo edit notebook.py --host 0.0.0.0 --port 2718
+
+# Access from Windows browser:
+# http://localhost:2718
+
+# For Jupyter (if needed):
+jupyter lab --ip=0.0.0.0 --port=8888 --no-browser
+```
+
+**Note**: Always use `--host 0.0.0.0` to bind to all interfaces, otherwise the server won't be accessible from outside the container.
+
+---
+
+## Bundle Release History
+
+See [airgap/BUNDLE_HISTORY.md](airgap/BUNDLE_HISTORY.md) for complete changelog.
+
+| Bundle | Date | Size | Key Changes |
+|--------|------|------|-------------|
+| `devenv-bundle-20260228.tar.gz` | 2026-02-28 | 516MB | Ubuntu-only, btop+lnav+new TUI tools, 26 total tools |
+| `devenv-bundle-20260226-ubuntu.tar.gz` | 2026-02-26 | 513MB | Dual-distro support (deprecated) |
+
+**Latest Release:** v1.8.1
 
 ---
 
@@ -121,9 +177,13 @@ docker run -it --rm \
 dotfiles-wsl/
 ├── bootstrap/       # Setup scripts (01-05)
 ├── airgap/          # Offline bundle/deploy
-├── nvim/            # Neovim config
-├── zsh/             # Shell config
+│   ├── bundle.sh    # Create bundle from online machine
+│   ├── deploy.sh    # Deploy bundle to airgapped machine
+│   └── cache/       # Downloaded tools and packages
+├── nvim/            # Neovim config (LazyVim-based)
+├── zsh/             # Shell config (zinit-based)
 ├── tmux/            # Multiplexer config
+├── marimo/          # Notebook config
 └── ...              # Other stow packages
 ```
 
@@ -170,51 +230,24 @@ jupyter lab
 
 ---
 
-## Marimo & Jupyter in Docker
-
-When running the airgap-dev container, expose ports to access marimo/jupyter from your browser:
-
-```bash
-# Start container with port forwarding
-docker run -it -p 2718:2718 -p 8888:8888 airgap-dev:latest zsh
-
-# Inside container, start marimo tutorial
-marimo tutorial intro --host 0.0.0.0 --port 2718
-
-# Or start marimo edit mode
-marimo edit notebook.py --host 0.0.0.0 --port 2718
-
-# Access from Windows browser:
-# http://localhost:2718
-
-# For Jupyter (if needed):
-jupyter lab --ip=0.0.0.0 --port=8888 --no-browser
-```
-
-**Note**: Always use `--host 0.0.0.0` to bind to all interfaces, otherwise the server won't be accessible from outside the container.
-
----
-
-## Testing Airgap Bundle
-
-```powershell
-# Full end-to-end test
-.\test-offline.ps1
-
-# Reuse existing bundle
-.\test-offline.ps1 -SkipBundle
-```
-
----
-
 ## Documentation
 
 - **GUIDE.md** — Complete tool reference and tutorials
 - **RUNAI.md** — Run:ai cluster deployment guide
 - **AGENTS.md** — Project context for AI assistants
+- **airgap/BUNDLE_HISTORY.md** — Bundle changelog
 
 ---
 
 ## Customization
 
 Add/remove tools in `bootstrap/03-install-tools.sh`. Add nvim plugins in `nvim/.config/nvim/lua/plugins/`. Fork and maintain your own branch.
+
+---
+
+## Known Issues
+
+- **Btop UTF-8 locale**: Fixed in latest bundle (UTF-8 locales now generated)
+- **Nvim clipboard**: Fixed in latest bundle (xclip now installed)
+- **Which-key icons**: Some Nerd Font icons may not display in Docker (terminal-dependent)
+- **Tmux font rendering**: Fonts are handled by the host terminal (WezTerm on Windows), not by the container
