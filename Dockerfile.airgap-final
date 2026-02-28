@@ -93,8 +93,8 @@ RUN echo "Installing CLI tools..." && \
     if [ -f btop.tbz ]; then \
         echo "Installing btop..." && \
         mkdir -p /tmp/btop && tar -xjf btop.tbz -C /tmp/btop 2>/dev/null && \
-        if [ -f /tmp/btop/btop/btop ]; then \
-            cp /tmp/btop/btop/btop /usr/local/bin/ && \
+        if [ -f /tmp/btop/btop/bin/btop ]; then \
+            cp /tmp/btop/btop/bin/btop /usr/local/bin/ && \
             chmod +x /usr/local/bin/btop; \
         fi && \
         rm -rf /tmp/btop; \
@@ -260,16 +260,7 @@ RUN echo "Installing Python CLI tools via uv..." && \
     /usr/local/bin/uv tool install jupyter 2>&1 || echo "  jupyter install skipped" && \
     /usr/local/bin/uv tool install jupytext 2>&1 || echo "  jupytext install skipped" && \
     /usr/local/bin/uv tool install harlequin 2>&1 || echo "  harlequin install skipped" && \
-    echo "Python CLI tools installation complete" \
-            /usr/local/bin/uv tool install --find-links $WHEELS_DIR harlequin 2>&1 || echo "  harlequin install skipped (may need more deps)"; \
-        else \
-            echo "  harlequin wheels not found in bundle"; \
-        fi && \
-        \
-        echo "Python CLI tools installation complete"; \
-    else \
-        echo "No wheels directory found in bundle, skipping Python tool installation"; \
-    fi
+    echo "Python CLI tools installation complete"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 8: Final Setup
@@ -295,8 +286,7 @@ ENV XDG_CONFIG_HOME=/home/gl/.config
 ENV XDG_DATA_HOME=/home/gl/.local/share
 ENV XDG_CACHE_HOME=/home/gl/.cache
 ENV XDG_STATE_HOME=/home/gl/.local/state
-# Set gcc as C compiler for nvim treesitter
-# Note: zig was tried but doesn't support -O2 flag required by treesitter
+# Use gcc as C compiler for nvim treesitter (zig doesn't support -O2)
 ENV CC=gcc
 
 # ═══════════════════════════════════════════════════════════════════════════════
