@@ -69,9 +69,6 @@ require("lazy").setup({
     -- JSON: json-language-server (schema validation, completion)
     { import = "lazyvim.plugins.extras.lang.json" },
 
-    -- Markdown: preview, concealing, and markdown-specific features
-    { import = "lazyvim.plugins.extras.lang.markdown" },
-
     -- DAP (Debug Adapter Protocol): the foundation for debugging in Neovim
     -- This sets up the UI, virtual text, keymaps for breakpoints, etc.
     { import = "lazyvim.plugins.extras.dap.core" },
