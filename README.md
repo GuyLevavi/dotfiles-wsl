@@ -44,6 +44,39 @@ Online PC                    Airgapped Network
 
 ---
 
+## Airgap Neovim Usage
+
+When working in the airgapped container, all Neovim plugins and tools are pre-installed. **Do NOT run update commands** - they require network access.
+
+### What NOT to do (requires network):
+- `:Lazy sync` - tries to update plugins from GitHub
+- `:MasonInstall <package>` - tries to download LSP tools  
+- `:TSInstall <parser>` - tries to compile/download parsers
+- `:UpdateRemotePlugins` - tries to update remote plugins
+
+### What TO do:
+- Just run `nvim` - everything is ready
+- Use `<leader>ff` for telescope file finder
+- Use `<leader>fg` for live grep
+- Use `<leader>e` for file explorer
+- Python LSP (basedpyright) is ready to go
+
+### If you need to add new plugins:
+1. Add plugin spec to `nvim/.config/nvim/lua/plugins/`
+2. Rebuild the Docker image with network access
+3. The new plugin will be baked into the image
+
+### What's pre-installed:
+- **50+ plugins** in `~/.local/share/nvim/lazy/`
+- **12 Mason packages** in `~/.local/share/nvim/mason/packages/`
+  - basedpyright, ruff, debugpy (Python)
+  - yaml-language-server, json-lsp, dockerfile-language-server
+  - markdownlint-cli2, markdown-toc
+  - shfmt, stylua, hadolint, tree-sitter-cli
+- **33 treesitter parsers** in `~/.local/share/nvim/site/parser/`
+
+---
+
 ## Tools Overview
 
 | Category    | Tools                                                        |
@@ -134,6 +167,31 @@ nvim  # Space d b (breakpoint), Space d c (continue)
 marimo edit notebook.py
 jupyter lab
 ```
+
+---
+
+## Marimo & Jupyter in Docker
+
+When running the airgap-dev container, expose ports to access marimo/jupyter from your browser:
+
+```bash
+# Start container with port forwarding
+docker run -it -p 2718:2718 -p 8888:8888 airgap-dev:latest zsh
+
+# Inside container, start marimo tutorial
+marimo tutorial intro --host 0.0.0.0 --port 2718
+
+# Or start marimo edit mode
+marimo edit notebook.py --host 0.0.0.0 --port 2718
+
+# Access from Windows browser:
+# http://localhost:2718
+
+# For Jupyter (if needed):
+jupyter lab --ip=0.0.0.0 --port=8888 --no-browser
+```
+
+**Note**: Always use `--host 0.0.0.0` to bind to all interfaces, otherwise the server won't be accessible from outside the container.
 
 ---
 

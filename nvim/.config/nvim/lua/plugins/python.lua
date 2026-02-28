@@ -127,6 +127,16 @@ return {
                 autoSearchPaths = true,
                 useLibraryCodeForTypes = true,
                 diagnosticMode = "openFilesOnly",
+                -- Enable auto-import completions for classes/functions
+                autoImportCompletions = true,
+                -- Index all installed packages for better completion
+                packageIndexDepths = {
+                  { name = "sklearn", depth = 2 },
+                  { name = "torch", depth = 2 },
+                  { name = "cv2", depth = 2 },
+                  { name = "numpy", depth = 2 },
+                  { name = "pandas", depth = 2 },
+                },
               },
             },
           },
@@ -139,11 +149,27 @@ return {
                 autoSearchPaths = true,
                 useLibraryCodeForTypes = true,
                 diagnosticMode = "openFilesOnly",
+                autoImportCompletions = true,
               },
             },
           },
         },
       },
     },
+  },
+
+  -- ── Disable ruff as LSP to avoid completion conflicts ──────────────
+  -- Ruff provides excellent linting but its completion conflicts with
+  -- basedpyright's semantic completion. We keep ruff for linting only.
+  {
+    "nvimtools/none-ls.nvim",
+    optional = true,
+    opts = function(_, opts)
+      local nls = require("null-ls")
+      opts.sources = vim.tbl_filter(function(source)
+        -- Only use ruff for diagnostics/formatting, not completion
+        return not source.name:match("ruff")
+      end, opts.sources or {})
+    end,
   },
 }

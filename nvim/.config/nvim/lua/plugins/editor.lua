@@ -47,14 +47,32 @@ return {
       },
     },
     keys = {
+      -- Use document symbols instead of workspace symbols
+      -- Workspace symbols require special LSP support (workspace/symbol method)
+      -- Document symbols work reliably with all LSP servers including basedpyright
       {
         "<leader>sP",
         function()
-          require("telescope.builtin").lsp_dynamic_workspace_symbols({
+          require("telescope.builtin").lsp_document_symbols({
             symbols = { "Class", "Function", "Method" },
           })
         end,
-        desc = "Search Python symbols (classes/functions)",
+        desc = "Search Python symbols in current file",
+      },
+      -- Alternative: Use dynamic workspace symbols with fallback
+      {
+        "<leader>sW",
+        function()
+          local ok, _ = pcall(function()
+            require("telescope.builtin").lsp_dynamic_workspace_symbols({
+              symbols = { "Class", "Function", "Method" },
+            })
+          end)
+          if not ok then
+            vim.notify("Workspace symbols not available, use <leader>sP for document symbols", vim.log.levels.WARN)
+          end
+        end,
+        desc = "Search Python symbols across workspace (if supported)",
       },
     },
   },

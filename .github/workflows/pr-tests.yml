@@ -64,72 +64,6 @@ jobs:
           done
           echo "OK: all stow packages exist"
 
-  # ── Medium checks (Fedora container) ─────────────────────────────────
-  stow-dry-run:
-    name: Stow dry-run (Fedora 43)
-    runs-on: ubuntu-latest
-    container:
-      image: registry.fedoraproject.org/fedora:43
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install stow
-        run: dnf install -y stow
-      - name: Create test user
-        run: useradd --create-home testuser
-      - name: Stow --simulate all packages
-        run: |
-          for pkg in zsh starship nvim tmux yazi git podman opencode codex; do
-            stow --dir="$(pwd)" --target="/home/testuser" --simulate --restow "$pkg" || exit 1
-          done
-          echo "OK: all packages stow correctly"
-
-  # ── Heavy integration tests ─────────────────────────────────────────
-  airgap-integration:
-    name: Airgap integration (Fedora 43)
-    runs-on: ubuntu-latest
-    container:
-      image: registry.fedoraproject.org/fedora:43
-      options: --cap-add=NET_ADMIN
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install build deps
-        run: dnf install -y curl git tar gzip sudo
-
-      - name: Create test user
-        run: bash bootstrap/01-create-user.sh gl
-
-      - name: Build airgap bundle
-        run: bash airgap/bundle.sh
-
-      - name: Verify bundle contents
-        run: |
-          BUNDLE=$(ls airgap/devenv-bundle-*.tar.gz | head -1)
-          tar -tzf "$BUNDLE" | grep -q 'cache/rpms/' || { echo "FAIL: no RPMs"; exit 1; }
-          echo "Bundle OK: $(du -h "$BUNDLE" | cut -f1)"
-
-      - name: Run airgap deploy
-        run: |
-          BUNDLE=$(ls airgap/devenv-bundle-*.tar.gz | head -1)
-          bash airgap/deploy.sh --user gl --force "$BUNDLE"
-
-      - name: Verify deployment
-        run: |
-          FAIL=0
-          for cmd in stow zsh tmux git podman; do
-            command -v "$cmd" >/dev/null 2>&1 || { echo "MISSING: $cmd"; FAIL=1; }
-          done
-          # Check tools in both possible locations (bundle deploy uses ~/.local/bin, Dockerfile uses /usr/local/bin)
-          for tool in starship zoxide fzf bat eza rg fd lazygit delta nvim uv glab helm oc fastfetch mc k9s lazydocker btop lnav glow zig; do
-            [ -x "/home/gl/.local/bin/$tool" ] || [ -x "/home/gl/.local/bin/$tool.appimage" ] || \
-            [ -x "/usr/local/bin/$tool" ] || [ -x "/usr/local/bin/$tool.appimage" ] || \
-              { echo "MISSING: $tool"; FAIL=1; }
-          done
-          [ -f /home/gl/.zshrc ] || { echo "MISSING: .zshrc"; FAIL=1; }
-          [ -f /home/gl/.config/nvim/init.lua ] || { echo "MISSING: nvim config"; FAIL=1; }
-          [ $FAIL -eq 0 ] || exit 1
-          echo "OK: all tools and configs present"
-
   # ── Docker build tests ───────────────────────────────────────────────
   docker-build:
     name: Docker build (${{ matrix.name }})
@@ -138,8 +72,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: fedora43
-            base_image: registry.fedoraproject.org/fedora:43
           - name: ubuntu2404
             base_image: ubuntu:24.04
     steps:

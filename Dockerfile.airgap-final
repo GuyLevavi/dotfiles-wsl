@@ -290,6 +290,13 @@ ENV XDG_STATE_HOME=/home/gl/.local/state
 ENV CC=gcc
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Expose ports for development tools
+# ═══════════════════════════════════════════════════════════════════════════════
+# Marimo tutorial/notebook server (default 2718)
+# JupyterLab/Jupyter Notebook (default 8888)
+EXPOSE 2718 8888
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Keep container running
 # ═══════════════════════════════════════════════════════════════════════════════
 CMD ["sleep", "infinity"]
