@@ -11,7 +11,9 @@ CACHE="${SCRIPT_DIR}/cache"
 mkdir -p "$CACHE"
 
 log()  { echo "==> $*"; }
+ok()   { echo "  ✓ $*"; }
 warn() { echo "  ! $*" >&2; }
+fail() { echo "  ✗ $*" >&2; }
 
 # Detect if we're in a Docker/container environment
 IN_CONTAINER=false
@@ -21,7 +23,7 @@ fi
 
 # Check for nvim
 if ! command -v nvim &>/dev/null; then
-    warn "nvim not found in PATH"
+    fail "nvim not found in PATH"
     exit 1
 fi
 
@@ -30,8 +32,7 @@ log "Using nvim: NVIM v$NVIM_VERSION"
 
 # Check minimum version for LazyVim
 if [[ "$(printf '%s\n' "0.11.2" "$NVIM_VERSION" | sort -V | head -n1)" != "0.11.2" ]]; then
-    warn "LazyVim requires Neovim >= 0.11.2, you have $NVIM_VERSION"
-    warn "Please upgrade nvim before running this script"
+    fail "LazyVim requires Neovim >= 0.11.2, you have $NVIM_VERSION"
     exit 1
 fi
 
@@ -42,18 +43,24 @@ export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
 export XDG_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
 
 # Use zig cc for treesitter compilation if available
+ZIG_PATH=""
 if [[ -f "$HOME/.local/bin/zig" ]]; then
     export CC="$HOME/.local/bin/zig"
+    ZIG_PATH="$HOME/.local/bin/zig"
     log "Using zig cc for treesitter compilation"
+elif command -v zig &>/dev/null; then
+    export CC="$(command -v zig)"
+    ZIG_PATH="$(command -v zig)"
+    log "Using zig cc for treesitter compilation ($(command -v zig))"
 else
-    warn "zig not found at ~/.local/bin/zig - treesitter may fail to compile parsers"
+    warn "zig not found - treesitter may fail to compile parsers"
 fi
 
 NVIM_CONFIG="${XDG_CONFIG_HOME}/nvim"
 NVIM_DATA="${XDG_DATA_HOME}/nvim"
 
 if [[ ! -d "$NVIM_CONFIG" ]]; then
-    echo "ERROR: $NVIM_CONFIG does not exist"
+    fail "$NVIM_CONFIG does not exist"
     exit 1
 fi
 
@@ -69,87 +76,132 @@ if [[ ! -d "$LAZY_PATH" ]]; then
     git clone --filter=blob:none https://github.com/folke/lazy.nvim.git \
         --branch=stable "$LAZY_PATH"
 fi
+ok "lazy.nvim ready"
 
-log "Step 2: Sync all lazy plugins..."
-# Note: We don't manually clone plugins that are in the lazy spec.
-# lazy.nvim will install them automatically during sync.
-
-log "Step 3: Sync all lazy plugins..."
+log "Step 2: Sync all lazy plugins (this takes a while)..."
 nvim --headless -c "lua require('lazy').sync({wait=true})" -c "qa" 2>&1 || {
     warn "Lazy sync may have had issues, continuing..."
 }
+PLUGIN_COUNT=$(ls "${NVIM_DATA}/lazy/" 2>/dev/null | wc -l)
+ok "Lazy plugins: $PLUGIN_COUNT"
 
-log "Step 4: Install/Update treesitter parsers..."
-# Core parsers for development
-PARSERS="python lua bash json yaml toml markdown markdown_inline html css dockerfile vim vimdoc regex diff gitcommit gitignore"
+log "Step 3: Install Mason packages via mason-tool-installer..."
+# This requires the mason-tool-installer.nvim plugin
+nvim --headless -c "sleep 3" -c "MasonToolsInstallSync" -c "qa" 2>&1 || {
+    warn "MasonToolsInstallSync may have had issues"
+}
+
+# Wait and retry if needed
+sleep 5
+MASON_COUNT=$(ls "${NVIM_DATA}/mason/packages/" 2>/dev/null | wc -l)
+if [[ $MASON_COUNT -lt 8 ]]; then
+    warn "Only $MASON_COUNT Mason packages, retrying..."
+    nvim --headless -c "sleep 5" -c "MasonToolsInstallSync" -c "qa" 2>&1 || true
+    MASON_COUNT=$(ls "${NVIM_DATA}/mason/packages/" 2>/dev/null | wc -l)
+fi
+ok "Mason packages: $MASON_COUNT"
+
+log "Step 4: Install/Compile treesitter parsers..."
+# Parsers matching treesitter.lua config
+PARSERS="python lua bash dockerfile json jsonc yaml toml markdown markdown_inline html css vim vimdoc regex gitcommit gitignore git_rebase diff helm requirements"
 for parser in $PARSERS; do
-    nvim --headless -c "lua vim.cmd('TSInstallSync $parser')" -c "qa" 2>/dev/null || {
-        warn "Failed to install parser: $parser"
-    }
+    echo -n "  Installing parser: $parser... "
+    nvim --headless -c "TSInstallSync $parser" -c "qa" 2>/dev/null && echo "✓" || echo "!"
 done
 
 # Update all parsers
-nvim --headless -c "lua vim.cmd('TSUpdateSync')" -c "qa" 2>/dev/null || true
+nvim --headless -c "TSUpdateSync" -c "qa" 2>/dev/null || true
 
-log "Step 5: Run MasonToolsInstallSync..."
-# This installs all Mason packages declared in mason-tool-installer.nvim config
-nvim --headless -c "MasonToolsInstallSync" -c "qa" 2>&1 || {
-    warn "MasonToolsInstallSync had issues (some packages may already be installed)"
-}
+# Count compiled parsers
+PARSER_COUNT=$(find "${NVIM_DATA}/site/parser/" -name "*.so" 2>/dev/null | wc -l)
+if [[ $PARSER_COUNT -eq 0 ]]; then
+    # Parsers might be in cache if site/parser doesn't exist
+    PARSER_COUNT=$(find "$HOME/.cache/nvim/" -name "*.so" 2>/dev/null | wc -l)
+fi
+ok "Treesitter parsers compiled: $PARSER_COUNT"
 
-log "Step 6: Verify critical components..."
+log "Step 5: Verify critical components..."
 
-# Verify mason-tool-installer
-if [[ -d "${NVIM_DATA}/lazy/mason-tool-installer.nvim" ]]; then
-    log "✓ mason-tool-installer.nvim found"
-else
-    warn "mason-tool-installer.nvim missing"
+# Check for .cloning files (indicates incomplete installations)
+CLONING_COUNT=$(find "${NVIM_DATA}/lazy" -name "*.cloning" 2>/dev/null | wc -l)
+if [[ $CLONING_COUNT -gt 0 ]]; then
+    warn "Found $CLONING_COUNT .cloning files - some plugins may be incomplete"
 fi
 
-# Verify mason packages
-MASON_COUNT=$(ls "${NVIM_DATA}/mason/packages/" 2>/dev/null | wc -l)
-log "Mason packages installed: $MASON_COUNT"
+# Verify essential Mason packages
+REQUIRED_MASON="basedpyright ruff debugpy yaml-language-server json-lsp"
+for pkg in $REQUIRED_MASON; do
+    if [[ -d "${NVIM_DATA}/mason/packages/$pkg" ]]; then
+        ok "Mason package: $pkg"
+    else
+        warn "Mason package missing: $pkg"
+    fi
+done
 
-# Verify treesitter parsers
-PARSER_COUNT=$(find "${NVIM_DATA}/site/parser/" -name "*.so" 2>/dev/null | wc -l)
-log "Treesitter parsers compiled: $PARSER_COUNT"
+# Verify mason-tool-installer plugin
+if [[ -d "${NVIM_DATA}/lazy/mason-tool-installer.nvim" ]]; then
+    ok "mason-tool-installer.nvim plugin installed"
+else
+    warn "mason-tool-installer.nvim plugin NOT found"
+fi
 
-# Verify lazy plugins
-PLUGIN_COUNT=$(ls "${NVIM_DATA}/lazy/" 2>/dev/null | wc -l)
-log "Lazy plugins installed: $PLUGIN_COUNT"
+# Verify LazyVim
+if [[ -d "${NVIM_DATA}/lazy/LazyVim" ]]; then
+    ok "LazyVim installed"
+else
+    fail "LazyVim NOT found"
+fi
 
-log "Step 7: Create bundles..."
+# Verify iron.nvim
+if [[ -d "${NVIM_DATA}/lazy/iron.nvim" ]]; then
+    ok "iron.nvim installed"
+else
+    warn "iron.nvim NOT found"
+fi
+
+log "Step 6: Create bundles..."
 
 # Main data bundle (plugins, mason packages)
 tar -czf "${CACHE}/nvim-data.tar.gz" -C "$HOME/.local/share" nvim
-log "Created: ${CACHE}/nvim-data.tar.gz ($(du -h "${CACHE}/nvim-data.tar.gz" | cut -f1))"
+ok "nvim-data.tar.gz ($(du -h "${CACHE}/nvim-data.tar.gz" | cut -f1))"
 
-# Cache bundle (treesitter parsers)
+# Cache bundle (treesitter parsers, luac cache)
 if [[ -d "$HOME/.cache/nvim" ]]; then
     tar -czf "${CACHE}/nvim-cache.tar.gz" -C "$HOME/.cache" nvim 2>/dev/null || true
     if [[ -f "${CACHE}/nvim-cache.tar.gz" ]]; then
-        log "Created: ${CACHE}/nvim-cache.tar.gz ($(du -h "${CACHE}/nvim-cache.tar.gz" | cut -f1))"
+        ok "nvim-cache.tar.gz ($(du -h "${CACHE}/nvim-cache.tar.gz" | cut -f1))"
     fi
 fi
 
-# State bundle (Mason registry, etc)
+# State bundle (Mason registry, lazy state)
 if [[ -d "$HOME/.local/state/nvim" ]]; then
     tar -czf "${CACHE}/nvim-state.tar.gz" -C "$HOME/.local/state" nvim 2>/dev/null || true
     if [[ -f "${CACHE}/nvim-state.tar.gz" ]]; then
-        log "Created: ${CACHE}/nvim-state.tar.gz ($(du -h "${CACHE}/nvim-state.tar.gz" | cut -f1))"
+        ok "nvim-state.tar.gz ($(du -h "${CACHE}/nvim-state.tar.gz" | cut -f1))"
     fi
 fi
 
 echo ""
-echo "=== Summary ==="
+echo "════════════════════════════════════════════════════════════════"
+echo "                   SUMMARY"
+echo "════════════════════════════════════════════════════════════════"
+echo ""
+echo "  Plugins:           $PLUGIN_COUNT"
+echo "  Mason packages:     $MASON_COUNT"
+echo "  Treesitter parsers: $PARSER_COUNT"
+echo "  .cloning files:     $CLONING_COUNT"
+echo ""
 ls -lh "${CACHE}"/nvim-*.tar.gz 2>/dev/null
+echo ""
+echo "════════════════════════════════════════════════════════════════"
 
-echo ""
+if [[ $MASON_COUNT -lt 8 ]] || [[ $CLONING_COUNT -gt 0 ]]; then
+    echo ""
+    warn "Some packages may be incomplete. Review the output above."
+    echo ""
+fi
+
 echo "Next steps:"
-echo "  1. Copy these files to airgap/cache/ in your bundle"
-echo "  2. Or use directly: tar -xzf ${CACHE}/nvim-data.tar.gz -C \$HOME"
-echo ""
-echo "For airgap deployment:"
-echo "  bash airgap/deploy.sh --offline devenv-bundle-*.tar.gz"
-echo "  # Then manually extract nvim data if not in bundle:"
-echo "  tar -xzf ${CACHE}/nvim-data.tar.gz -C /home/\$USER"
+echo "  1. Verify nvim-data.tar.gz contains all expected packages"
+echo "  2. Copy to airgap/cache/ in the bundle"
+echo "  3. Docker build -f Dockerfile.airgap-final -t airgap-dev ."

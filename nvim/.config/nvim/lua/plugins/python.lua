@@ -2,7 +2,7 @@
 -- ===================================================
 -- Customizations on top of the LazyVim Python extra (lang.python)
 -- and DAP core extra (dap.core). Those extras already handle:
---   - pyright (type checking / intellisense)
+--   - basedpyright (type checking / intellisense) - primary
 --   - ruff (linting via LSP)
 --   - nvim-dap + dap-ui + virtual-text + mason-nvim-dap
 --   - nvim-dap-python (setup + <leader>dPt / <leader>dPc)
@@ -15,7 +15,10 @@
 --   - Custom debug configurations (launch with args, launch module)
 --   - Neotest pytest args (-v -s)
 --   - Conform ruff formatter setup
---   - Pyright analysis tweaks for ML code
+--   - basedpyright as primary LSP (pyright as fallback)
+
+-- Use basedpyright as primary Python LSP (pyright as fallback)
+vim.g.lazyvim_python_lsp = "basedpyright"
 
 return {
   -- ── VS Code-style Debug Keymaps (F-keys) ─────────────────────────
@@ -107,13 +110,27 @@ return {
     },
   },
 
-  -- ── Pyright: ML-friendly settings ────────────────────────────────
+  -- ── basedpyright: ML-friendly settings ─────────────────────────────
   -- "basic" type checking is less noisy for ML code where libraries
   -- like torch, cv2, numpy often have incomplete type stubs.
+  -- basedpyright is the primary LSP (set above via vim.g.lazyvim_python_lsp)
+  -- pyright is configured as a fallback if basedpyright is not available.
   {
     "neovim/nvim-lspconfig",
     opts = {
       servers = {
+        basedpyright = {
+          settings = {
+            python = {
+              analysis = {
+                typeCheckingMode = "basic",
+                autoSearchPaths = true,
+                useLibraryCodeForTypes = true,
+                diagnosticMode = "openFilesOnly",
+              },
+            },
+          },
+        },
         pyright = {
           settings = {
             python = {

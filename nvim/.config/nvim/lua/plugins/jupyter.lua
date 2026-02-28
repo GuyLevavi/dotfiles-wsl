@@ -65,7 +65,6 @@ return {
         -- Highlight sent code briefly so you can see what was sent
         highlight = {
           italic = true,
-          timeout = 300,
         },
 
         -- Ignore blank lines when sending to REPL (cleaner output)

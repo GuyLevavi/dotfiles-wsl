@@ -3,3 +3,10 @@ airgap/cache/
 airgap/devenv-bundle-*.tar.gz
 *.tar.gz
 .git/
+
+# Allow specific files for airgap build
+!airgap/devenv-bundle-20260226-ubuntu.tar.gz
+!airgap/cache/nvim-data.tar.gz
+!airgap/cache/nvim-cache.tar.gz
+!airgap/cache/nvim-state.tar.gz
+!airgap/zig.tar.xz

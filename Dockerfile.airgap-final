@@ -1,0 +1,263 @@
+# Dockerfile.airgap-final — Production-ready offline airgap environment
+# 
+# BUILD: docker build -f Dockerfile.airgap-final -t airgap-dev .
+# RUN:  docker run --network none -d --name airgap-dev airgap-dev
+# ATTACH: docker exec -it airgap-dev zsh
+
+FROM ubuntu:24.04
+
+SHELL ["/bin/bash", "-c"]
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TERM=xterm-256color
+ENV COLORTERM=truecolor
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 1: System Setup
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Install base packages
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        sudo curl ca-certificates git zsh tmux locales \
+        unzip xz-utils bzip2 build-essential \
+        python3-dev libffi-dev libssl-dev \
+        npm nodejs ipython3 && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create user 'gl'
+RUN groupadd -g 1001 gl 2>/dev/null || true && \
+    useradd -u 1001 -g gl -s /bin/zsh -m gl && \
+    usermod -aG sudo gl && \
+    echo "gl ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/gl && \
+    chmod 0440 /etc/sudoers.d/gl && \
+    mkdir -p /home/gl/.local/{bin,share,state} /home/gl/.config /home/gl/.cache && \
+    chown -R gl:gl /home/gl
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 2: Copy All Source Files
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Copy GitHub bundle (Ubuntu with all CLI tools)
+COPY airgap/devenv-bundle-20260226-ubuntu.tar.gz /tmp/bundle.tar.gz
+
+# Copy fresh nvim-data (regenerated with all plugins, no .cloning files)
+COPY airgap/cache/nvim-data.tar.gz /tmp/
+COPY airgap/cache/nvim-cache.tar.gz /tmp/
+COPY airgap/cache/nvim-state.tar.gz /tmp/
+
+# Copy zig compiler
+COPY airgap/zig.tar.xz /tmp/
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 3: Extract and Install Tools (as root)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Extract bundle
+RUN mkdir -p /tmp/bundle && \
+    cd /tmp/bundle && \
+    tar -xzf /tmp/bundle.tar.gz && \
+    echo "Bundle extracted"
+
+# Install DEB packages from bundle
+RUN if [ -d /tmp/bundle/cache/debs ]; then \
+        echo "Installing system packages from bundle..." && \
+        cd /tmp/bundle/cache/debs && \
+        dpkg -i *.deb 2>/dev/null || true && \
+        apt-get install -y --fix-broken 2>/dev/null || true && \
+        echo "System packages installed"; \
+    fi
+
+# Install all CLI tools from bundle
+RUN echo "Installing CLI tools..." && \
+    cd /tmp/bundle/cache && \
+    mkdir -p /usr/local/bin && \
+    \
+    # Extract tarballs (skip nvim, zinit, zsh plugins - handled separately) \
+    for f in *.tar.gz; do \
+        if [[ "$f" != *nvim* ]] && [[ "$f" != *zinit* ]] && [[ "$f" != *zsh* ]] && \
+           [[ "$f" != *fzf-tab* ]] && [[ "$f" != *fast-syntax* ]]; then \
+            echo "Extracting $f..." && \
+            mkdir -p /tmp/ex && tar -xzf "$f" -C /tmp/ex 2>/dev/null && \
+            find /tmp/ex -maxdepth 3 -type f -executable -exec cp {} /usr/local/bin/ \; 2>/dev/null && \
+            rm -rf /tmp/ex; \
+        fi \
+    done && \
+    \
+    # Copy standalone binaries \
+    cp jf mc /usr/local/bin/ 2>/dev/null || true && \
+    chmod +x /usr/local/bin/jf /usr/local/bin/mc 2>/dev/null || true && \
+    \
+    # Extract yazi from zip \
+    if [ -f yazi.zip ]; then \
+        echo "Installing yazi..." && \
+        mkdir -p /tmp/yz && unzip -o yazi.zip -d /tmp/yz 2>/dev/null && \
+        find /tmp/yz -name "yazi" -type f -exec cp {} /usr/local/bin/ \; && \
+        chmod +x /usr/local/bin/yazi && \
+        rm -rf /tmp/yz; \
+    fi && \
+    \
+    # Extract nvim AppImage properly \
+    echo "Installing nvim..." && \
+    cd /tmp && \
+    chmod +x /tmp/bundle/cache/nvim.appimage && \
+    /tmp/bundle/cache/nvim.appimage --appimage-extract >/dev/null 2>&1 && \
+    cp squashfs-root/usr/bin/nvim /usr/local/bin/ && \
+    mkdir -p /usr/local/share/nvim && \
+    cp -r squashfs-root/usr/share/nvim/runtime /usr/local/share/nvim/ 2>/dev/null || true && \
+    rm -rf squashfs-root && \
+    chmod +x /usr/local/bin/nvim && \
+    \
+    # Make everything executable \
+    chmod +x /usr/local/bin/* 2>/dev/null || true && \
+    \
+    echo "" && \
+    echo "=== Tools installed ===" && \
+    ls -la /usr/local/bin/ | tail -20
+
+# Install zig compiler
+RUN echo "Installing zig..." && \
+    cd /tmp && \
+    tar -xf zig.tar.xz && \
+    ZIG_DIR=$(find /tmp -maxdepth 1 -type d -name "zig*" | head -1) && \
+    if [ -n "$ZIG_DIR" ]; then \
+        cp "$ZIG_DIR/zig" /usr/local/bin/ && \
+        mkdir -p /usr/local/lib/zig && \
+        cp -r "$ZIG_DIR/lib/"* /usr/local/lib/zig/ 2>/dev/null || true && \
+        echo "zig installed: $(/usr/local/bin/zig version)"; \
+    fi && \
+    rm -rf /tmp/zig*
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 4: Install zinit and zsh plugins (Pre-install for offline use)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+RUN echo "Installing zinit and zsh plugins..." && \
+    mkdir -p /home/gl/.local/share/zinit && \
+    cd /tmp/bundle/cache && \
+    \
+    # Extract zinit \
+    if [ -f zinit.tar.gz ]; then \
+        echo "Extracting zinit..." && \
+        mkdir -p /tmp/zin && tar -xzf zinit.tar.gz -C /tmp/zin && \
+        if [ -d /tmp/zin/repo ]; then \
+            mv /tmp/zin/repo /home/gl/.local/share/zinit/zinit.git && \
+            echo "zinit extracted"; \
+        fi && \
+        rm -rf /tmp/zin; \
+    fi && \
+    \
+    # Create plugins directory structure \
+    mkdir -p /home/gl/.local/share/zinit/plugins && \
+    \
+    # Extract zsh plugins with correct paths matching .zshrc zinit load statements \
+    # zdharma-continuum/fast-syntax-highlighting \
+    mkdir -p "/home/gl/.local/share/zinit/plugins/zdharma-continuum---fast-syntax-highlighting" && \
+    tar -xzf fast-syntax-highlighting.tar.gz -C "/home/gl/.local/share/zinit/plugins/zdharma-continuum---fast-syntax-highlighting" --strip-components=1 && \
+    \
+    # zsh-users/zsh-autosuggestions (NOTE: different owner than zdharma-continuum) \
+    mkdir -p "/home/gl/.local/share/zinit/plugins/zsh-users---zsh-autosuggestions" && \
+    tar -xzf zsh-autosuggestions.tar.gz -C "/home/gl/.local/share/zinit/plugins/zsh-users---zsh-autosuggestions" --strip-components=1 && \
+    \
+    # zsh-users/zsh-completions \
+    mkdir -p "/home/gl/.local/share/zinit/plugins/zsh-users---zsh-completions" && \
+    tar -xzf zsh-completions.tar.gz -C "/home/gl/.local/share/zinit/plugins/zsh-users---zsh-completions" --strip-components=1 && \
+    \
+    # Aloxaf/fzf-tab \
+    mkdir -p "/home/gl/.local/share/zinit/plugins/Aloxaf---fzf-tab" && \
+    tar -xzf fzf-tab.tar.gz -C "/home/gl/.local/share/zinit/plugins/Aloxaf---fzf-tab" --strip-components=1 && \
+    echo "zsh plugins extracted" && \
+    \
+    chown -R gl:gl /home/gl/.local/share/zinit && \
+    echo "zinit plugins installed"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 5: Copy All Dotfiles
+# ═══════════════════════════════════════════════════════════════════════════════
+
+COPY zsh/ /home/gl/
+COPY nvim/.config/nvim/ /home/gl/.config/nvim/
+COPY starship/.config/starship.toml /home/gl/.config/starship.toml
+COPY tmux/.config/tmux/ /home/gl/.config/tmux/
+COPY yazi/.config/yazi/ /home/gl/.config/yazi/
+COPY git/.gitconfig /home/gl/.gitconfig
+COPY git/.gitignore_global /home/gl/.gitignore_global
+COPY podman/.config/containers/ /home/gl/.config/containers/
+COPY opencode/.config/opencode/ /home/gl/.config/opencode/
+COPY codex/.codex/ /home/gl/.codex/
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 6: Extract nvim-data (complete, no .cloning files)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+RUN echo "Extracting nvim data..." && \
+    mkdir -p /home/gl/.local/share/nvim /home/gl/.cache/nvim /home/gl/.local/state/nvim && \
+    tar -xzf /tmp/nvim-data.tar.gz -C /home/gl/.local/share/ && \
+    tar -xzf /tmp/nvim-cache.tar.gz -C /home/gl/.cache/ && \
+    tar -xzf /tmp/nvim-state.tar.gz -C /home/gl/.local/state/ && \
+    \
+    # Verify no .cloning files \
+    CLONING_COUNT=$(find /home/gl/.local/share/nvim/lazy -name "*.cloning" 2>/dev/null | wc -l) && \
+    echo "Plugin count: $(ls /home/gl/.local/share/nvim/lazy/ 2>/dev/null | wc -l)" && \
+    echo "Cloning files: $CLONING_COUNT (should be 0)" && \
+    \
+    chown -R gl:gl /home/gl && \
+    chmod 644 /home/gl/.zshrc
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 7: Python Setup (as user 'gl')
+# ═══════════════════════════════════════════════════════════════════════════════
+
+USER gl
+
+# Install Python versions 3.10, 3.11, 3.12 using uv
+RUN echo "Installing Python versions..." && \
+    export UV_CACHE_DIR=/home/gl/.cache/uv && \
+    mkdir -p $UV_CACHE_DIR && \
+    /usr/local/bin/uv python install 3.10 2>&1 | tail -3 && \
+    /usr/local/bin/uv python install 3.11 2>&1 | tail -3 && \
+    /usr/local/bin/uv python install 3.12 2>&1 | tail -3 && \
+    echo "" && \
+    echo "Python versions installed:" && \
+    /usr/local/bin/uv python list 2>&1 | grep -E "cpython-3\.(10|11|12)"
+
+# Install pytest using uv pip with virtualenv
+RUN echo "Installing pytest..." && \
+    mkdir -p /home/gl/.venvs && \
+    /usr/local/bin/uv venv /home/gl/.venvs/main && \
+    VIRTUAL_ENV=/home/gl/.venvs/main /usr/local/bin/uv pip install pytest pytest-asyncio && \
+    ln -sf /home/gl/.venvs/main/bin/pytest /home/gl/.local/bin/pytest && \
+    /home/gl/.local/bin/pytest --version
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 8: Final Setup
+# ═══════════════════════════════════════════════════════════════════════════════
+
+USER root
+
+# Clean up
+RUN rm -rf /tmp/* /var/lib/apt/lists/* && \
+    apt-get clean 2>/dev/null || true
+
+# Switch to user and set environment
+USER gl
+WORKDIR /home/gl
+
+ENV HOME=/home/gl
+ENV USER=gl
+ENV SHELL=/bin/zsh
+ENV TERM=xterm-256color
+ENV COLORTERM=truecolor
+ENV PATH="/home/gl/.local/bin:/home/gl/.venvs/main/bin:/usr/local/bin:/usr/bin:/usr/sbin:/bin:/sbin"
+ENV XDG_CONFIG_HOME=/home/gl/.config
+ENV XDG_DATA_HOME=/home/gl/.local/share
+ENV XDG_CACHE_HOME=/home/gl/.cache
+ENV XDG_STATE_HOME=/home/gl/.local/state
+# Set zig as C compiler for nvim treesitter
+ENV CC=/usr/local/bin/zig
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Keep container running
+# ═══════════════════════════════════════════════════════════════════════════════
+CMD ["sleep", "infinity"]
