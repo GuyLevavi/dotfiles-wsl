@@ -254,8 +254,9 @@ ENV XDG_CONFIG_HOME=/home/gl/.config
 ENV XDG_DATA_HOME=/home/gl/.local/share
 ENV XDG_CACHE_HOME=/home/gl/.cache
 ENV XDG_STATE_HOME=/home/gl/.local/state
-# Set zig as C compiler for nvim treesitter
-ENV CC=/usr/local/bin/zig
+# Set gcc as C compiler for nvim treesitter
+# Note: zig was tried but doesn't support -O2 flag required by treesitter
+ENV CC=gcc
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Keep container running
