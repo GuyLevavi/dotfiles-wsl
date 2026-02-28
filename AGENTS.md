@@ -576,3 +576,118 @@ If you need to add new plugins:
 10. Marimo port exposure
 
 **Estimated Time**: 2-3 hours for Phase 1, 1-2 hours for Phase 2.
+
+---
+
+## Sprint Status (2026-02-28)
+
+### ✅ Completed Tasks
+
+#### Phase 1 (Critical) - ALL DONE ✅
+1. **CI Cleanup** - Removed Fedora tests from `.github/workflows/pr-tests.yml`
+   - Deleted `stow-dry-run` job (Fedora 43)
+   - Deleted `airgap-integration` job (Fedora 43)
+   - Kept Ubuntu 24.04 Docker build test
+   
+2. **Bundle Reference Update** - Updated all docs to `devenv-bundle-20260228.tar.gz`
+   - Updated README.md
+   - Created airgap/BUNDLE_HISTORY.md
+   - Tagged release v1.8.1
+   
+3. **Clipboard Configuration** - Fixed nvim clipboard error
+   - Added `xclip` and `xsel` to Dockerfile packages
+   - WSL clipboard uses `clip.exe`
+   - Native Linux uses `xclip`
+   - Yank goes to system clipboard (+ register)
+   - Delete stays internal (unnamed register)
+   
+4. **Python Autocomplete** - Fixed class/variable completion
+   - Enabled `autoImportCompletions = true` in basedpyright
+   - Added `packageIndexDepths` for torch, numpy, pandas, etc.
+   - Verified LSP source in blink.cmp
+   
+5. **Documentation Update** - Complete README overhaul
+   - Added Docker airgap quickstart
+   - Removed Fedora references
+   - Added bundle history section
+   - Added known issues section
+
+#### Phase 2 (Important) - ALL DONE ✅
+6. **Treesitter Gitcommit Fix** - Disabled auto_install
+   - Set `auto_install = false` in treesitter.lua
+   - Removed `gitcommit` from ensure_installed
+   - Prevents network access when opening git files
+   
+7. **Telescope Workspace Symbols** - Changed to document symbols
+   - `<leader>sP` now uses `lsp_document_symbols()` (reliable)
+   - Added `<leader>sW` for workspace symbols with error handling
+   - No more "method not supported" errors
+   
+8. **Blink Toggle Mechanism** - Added pin=true
+   - Added `pin = true` to blink.lua
+   - Added explicit `dir` path
+   - Plugin can now be toggled without network access
+   
+9. **Marimo Port Exposure** - Added to Dockerfile
+   - Added `EXPOSE 2718 8888` for marimo/jupyter
+   - Documented port forwarding in README
+   - Added marimo config with dark mode, vim mode, JetBrainsMono font
+
+#### Additional Fixes (Not in Original Plan) ✅
+10. **Btop UTF-8 Locale** - Fixed locale error
+    - Added `locale-gen en_US.UTF-8` in Dockerfile
+    - Set `LANG=en_US.UTF-8` and `LC_ALL=en_US.UTF-8`
+    - Btop now starts without locale warnings
+    
+11. **Python DAP Debugger** - Fixed exit code 1
+    - Added Mason registry lookup for debugpy path
+    - Fallback to system Python if Mason debugpy not found
+    - Added proper debug configurations
+    
+12. **Nvim Autosave** - Implemented without autoformat
+    - Autosaves on `InsertLeave` and `TextChanged`
+    - Disabled autoformat on save (`vim.g.autoformat = false`)
+    - Manual formatting with `<leader>cf` still works
+    
+13. **Marimo Config** - Created comprehensive config
+    - Tokyo Night dark theme
+    - JetBrainsMono Nerd Font at 14pt
+    - Vim mode enabled
+    - Server binds to 0.0.0.0:2718
+    - Auto-browser disabled for Docker
+
+### 📊 Current State Summary
+
+**Working ✅:**
+- 26 CLI tools in Docker container
+- 50 nvim plugins, 12 Mason packages, 33 treesitter parsers
+- Clipboard: yank to system, delete internal
+- Python: basedpyright LSP, autocomplete, DAP debugging
+- Marimo: dark mode, vim mode, accessible via browser
+- Btop: no UTF-8 locale errors
+- Nvim: autosave enabled, no autoformat
+
+**Known Issues ℹ️:**
+- Whichkey icons: Some Nerd Font icons may not display (depends on host terminal font)
+- Tmux fonts: Handled by host terminal (WezTerm on Windows), not container
+- Jupyter: No executable provided by package (use jupytext or add jupyter-core if needed)
+
+### 🏷️ Git Tag
+Release v1.8.1 tagged: `git tag -a v1.8.1`
+
+### 📦 Bundle
+Latest bundle: `devenv-bundle-20260228.tar.gz` (516MB)
+Location: `airgap/devenv-bundle-20260228.tar.gz`
+
+### 📝 Documentation
+- README.md: Updated with Docker workflow
+- airgap/BUNDLE_HISTORY.md: Complete release history
+- AGENTS.md: This sprint status added
+
+### 🎯 Next Steps (Phase 3)
+1. **GHCR Push** - Push image to ghcr.io/guylevavi/airgap-dev:latest (needs write:packages token)
+2. **Tmux Improvements** - Research devopstoolbox/dotfiles patterns (optional)
+3. **Whichkey Icons** - Consider text-only icons for better compatibility (optional)
+4. **Headless Tests** - Create automated test suite for Python tooling (optional)
+
+---
