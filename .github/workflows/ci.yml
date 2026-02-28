@@ -8,11 +8,10 @@ on:
     tags: [v*]
 
 jobs:
-  # ── Fast checks (run on every push/PR, skip on tag) ──────────────────
+  # ── Fast checks (run on every push/PR/tag) ──────────────────────────────
   shellcheck:
     name: ShellCheck
     runs-on: ubuntu-latest
-    if: "!startsWith(github.ref, 'refs/tags/')"
     steps:
       - uses: actions/checkout@v4
       - name: Run ShellCheck
@@ -31,7 +30,6 @@ jobs:
   lua-syntax:
     name: Lua syntax
     runs-on: ubuntu-latest
-    if: "!startsWith(github.ref, 'refs/tags/')"
     steps:
       - uses: actions/checkout@v4
       - name: Install lua
@@ -47,7 +45,6 @@ jobs:
   config-syntax:
     name: Config file syntax
     runs-on: ubuntu-latest
-    if: "!startsWith(github.ref, 'refs/tags/')"
     steps:
       - uses: actions/checkout@v4
       - name: Validate configs
@@ -60,7 +57,6 @@ jobs:
   stow-structure:
     name: Stow package structure
     runs-on: ubuntu-latest
-    if: "!startsWith(github.ref, 'refs/tags/')"
     steps:
       - uses: actions/checkout@v4
       - name: Verify stow packages
@@ -70,11 +66,10 @@ jobs:
           done
           echo "OK: all stow packages exist"
 
-  # ── Docker build tests (run on every push/PR, skip on tag) ────────────
+  # ── Docker build tests ─────────────────────────────────────────────────
   docker-build:
     name: Docker build (${{ matrix.name }})
     runs-on: ubuntu-latest
-    if: "!startsWith(github.ref, 'refs/tags/')"
     strategy:
       fail-fast: false
       matrix:
