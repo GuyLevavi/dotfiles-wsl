@@ -84,8 +84,8 @@ download "https://dl.min.io/client/mc/release/linux-amd64/archive/mc.${MC_VERSIO
 # New TUI tools
 download "https://github.com/derailed/k9s/releases/download/v${K9S_VERSION}/k9s_linux_amd64.tar.gz" k9s.tar.gz
 download "https://github.com/jesseduffield/lazydocker/releases/download/v${LAZYDOCKER_VERSION}/lazydocker_${LAZYDOCKER_VERSION}_Linux_x86_64.tar.gz" lazydocker.tar.gz
-download "https://github.com/aristocratos/btop/releases/download/v${BTOP_VERSION}/btop-x86_64-linux.tbz" btop.tbz
-download "https://github.com/tstack/lnav/releases/download/v${LNAV_VERSION}/lnav-${LNAV_VERSION}-x86_64-linux-musl.zip" lnav.zip
+download "https://github.com/aristocratos/btop/releases/download/v${BTOP_VERSION}/btop-x86_64-unknown-linux-musl.tbz" btop.tbz
+download "https://github.com/tstack/lnav/releases/download/v${LNAV_VERSION}/lnav-${LNAV_VERSION}-linux-musl-x86_64.zip" lnav.zip
 download "https://github.com/charmbracelet/glow/releases/download/v${GLOW_VERSION}/glow_${GLOW_VERSION}_Linux_x86_64.tar.gz" glow.tar.gz
 
 # Zig C compiler
