@@ -119,8 +119,10 @@ jobs:
           for cmd in stow zsh tmux git podman; do
             command -v "$cmd" >/dev/null 2>&1 || { echo "MISSING: $cmd"; FAIL=1; }
           done
+          # Check tools in both possible locations (bundle deploy uses ~/.local/bin, Dockerfile uses /usr/local/bin)
           for tool in starship zoxide fzf bat eza rg fd lazygit delta nvim uv glab helm oc fastfetch mc k9s lazydocker btop lnav glow zig; do
             [ -x "/home/gl/.local/bin/$tool" ] || [ -x "/home/gl/.local/bin/$tool.appimage" ] || \
+            [ -x "/usr/local/bin/$tool" ] || [ -x "/usr/local/bin/$tool.appimage" ] || \
               { echo "MISSING: $tool"; FAIL=1; }
           done
           [ -f /home/gl/.zshrc ] || { echo "MISSING: .zshrc"; FAIL=1; }
