@@ -43,6 +43,7 @@ return {
     config = function()
       -- Find debugpy from Mason installation (with error handling)
       local debugpy_path = nil
+      local debugpy_found_in = nil
       
       -- Try Mason registry first (wrapped in pcall for safety)
       local ok, mason_registry = pcall(require, "mason-registry")
@@ -51,16 +52,42 @@ return {
           if mason_registry.is_installed("debugpy") then
             local debugpy_pkg = mason_registry.get_package("debugpy")
             if debugpy_pkg and debugpy_pkg.get_install_path then
-              local path = debugpy_pkg:get_install_path() .. "/venv/bin/python"
-              if vim.fn.executable(path) == 1 then
-                debugpy_path = path
+              -- Try multiple possible paths
+              local possible_paths = {
+                debugpy_pkg:get_install_path() .. "/venv/bin/python",
+                debugpy_pkg:get_install_path() .. "/bin/python",
+                debugpy_pkg:get_install_path() .. "/venv/bin/python3",
+                debugpy_pkg:get_install_path() .. "/bin/python3",
+              }
+              for _, path in ipairs(possible_paths) do
+                if vim.fn.executable(path) == 1 then
+                  -- Verify it's actually working
+                  local test_cmd = path .. " -c \"import debugpy; print(debugpy.__version__)\" 2>/dev/null"
+                  local result = vim.fn.system(test_cmd)
+                  if vim.v.shell_error == 0 and result ~= "" then
+                    debugpy_path = path
+                    debugpy_found_in = "Mason"
+                    break
+                  end
+                end
               end
             end
           end
         end)
       end
       
-      -- Fallback to system python if debugpy not found in Mason
+      -- Fallback: check if system Python has debugpy installed
+      if not debugpy_path then
+        local system_python = vim.fn.exepath("python3") or vim.fn.exepath("python") or "/usr/bin/python3"
+        local test_cmd = system_python .. " -m debugpy --version 2>/dev/null"
+        local result = vim.fn.system(test_cmd)
+        if vim.v.shell_error == 0 then
+          debugpy_path = system_python
+          debugpy_found_in = "system"
+        end
+      end
+      
+      -- Last resort: use any available Python and hope debugpy is importable
       if not debugpy_path then
         local python_path = vim.fn.exepath("python3") or vim.fn.exepath("python") or "/usr/bin/python3"
         local venv = os.getenv("VIRTUAL_ENV") or os.getenv("CONDA_PREFIX")
@@ -71,12 +98,17 @@ return {
           end
         end
         debugpy_path = python_path
+        debugpy_found_in = "fallback"
       end
       
       -- Setup dap-python with found path
       local dap_python_ok, dap_python = pcall(require, "dap-python")
       if dap_python_ok then
         dap_python.setup(debugpy_path)
+        -- Debug notification (only shows if needed)
+        -- vim.notify("DAP using " .. debugpy_found_in .. " Python: " .. debugpy_path, vim.log.levels.DEBUG)
+      else
+        vim.notify("Failed to load dap-python: " .. tostring(dap_python), vim.log.levels.WARN)
       end
 
       -- Add custom launch configurations

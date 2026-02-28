@@ -737,3 +737,43 @@ Location: `airgap/devenv-bundle-20260228.tar.gz`
 - URL: https://github.com/GuyLevavi/dotfiles-wsl/releases/tag/v1.8.1
 
 ---
+
+#### 18. DAP Debugger "Can't Find Debugpy" Fix
+**Problem**: DAP debugger still couldn't find debugpy even though it's installed.
+
+**Fix**:
+- Enhanced debugpy detection with multiple path attempts
+- Added verification that Python actually has debugpy module (`python -c "import debugpy"`)
+- Check multiple Mason paths: `/venv/bin/python`, `/bin/python`, etc.
+- Fallback to system Python if it has debugpy (`python -m debugpy --version`)
+- Last resort: use any available Python and hope for the best
+- All wrapped in pcall() for graceful failure handling
+
+**Files**: `nvim/.config/nvim/lua/plugins/python.lua`
+
+#### 19. Clipboard in Docker on Linux PC Fix
+**Problem**: Clipboard wasn't working in Docker on your Linux PC (yank wasn't copying to system clipboard).
+
+**Fix**:
+- Implemented OSC52 clipboard provider for Docker environments
+- OSC52 uses terminal escape sequences (works through any terminal)
+- Supported by: WezTerm, Alacritty, Windows Terminal, iTerm2, etc.
+- Auto-detects Docker via `/.dockerenv` file
+- Falls back to OSC52 for any headless environment
+- WSL still uses clip.exe as before
+
+**Files**: `nvim/.config/nvim/lua/config/options.lua`
+
+#### 20. Tmux Enhancements (omerxx-inspired)
+**Improvements from omerxx/dotfiles**:
+- Added `detach-on-destroy off` - keeps tmux running when last window closes
+- Increased history-limit to 1,000,000 (from 50,000)
+- Added automatic window rename based on current process
+- Added zoom indicator `[Z]` to window status bar
+- Smart clipboard detection in copy mode (WSL clip.exe, xclip, wl-copy, or internal)
+- Copy mode now exits cleanly with 'q' or Escape
+- Better environment detection for clipboard tools
+
+**Files**: `tmux/.config/tmux/tmux.conf`
+
+---

@@ -264,6 +264,12 @@ Add/remove tools in `bootstrap/03-install-tools.sh`. Add nvim plugins in `nvim/.
 ## Known Issues
 
 - **Btop UTF-8 locale**: Fixed in latest bundle (UTF-8 locales now generated)
-- **Nvim clipboard**: Fixed in latest bundle (xclip now installed)
+- **Nvim clipboard**: Fixed - uses OSC52 for Docker (works in modern terminals), clip.exe for WSL
 - **Which-key icons**: Some Nerd Font icons may not display in Docker (terminal-dependent)
 - **Tmux font rendering**: Fonts are handled by the host terminal (WezTerm on Windows), not by the container
+
+### Clipboard Notes
+
+**WSL**: Yank in nvim → paste in Windows apps (uses clip.exe)
+**Docker**: Yank in nvim → paste works via terminal (uses OSC52 escape sequences, supported by WezTerm, Alacritty, Windows Terminal)
+**Linux Desktop**: Yank in nvim → paste in other Linux apps (uses xclip)

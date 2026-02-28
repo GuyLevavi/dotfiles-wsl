@@ -40,16 +40,34 @@ vim.g.loaded_perl_provider = 0
 vim.g.loaded_node_provider = 0
 
 -- ═════════════════════════════════════════════════════════════════════
--- CLIPBOARD CONFIGURATION FOR WSL/Windows/Headless
+-- CLIPBOARD CONFIGURATION FOR WSL/Windows/Docker
 -- ═════════════════════════════════════════════════════════════════════
 -- Delete operations use internal nvim clipboard (dd, x)
 -- Yank operations use system clipboard (+ register) when available
--- Gracefully handles headless contexts (WSL, Docker, RunAI)
+-- Gracefully handles all contexts (WSL, Docker, Linux desktop)
 
 -- Detect environment
 local is_wsl = vim.fn.has("wsl") == 1 or vim.env.WSL_DISTRO_NAME ~= nil
+local is_docker = vim.fn.filereadable("/.dockerenv") == 1 or vim.env.CONTAINER_ID ~= nil
 local has_display = vim.env.DISPLAY ~= nil or vim.env.WAYLAND_DISPLAY ~= nil
-local is_headless = not has_display and not is_wsl
+
+-- OSC52 clipboard provider (works through terminal escape sequences)
+-- Most reliable for Docker and SSH sessions
+local function get_osc52_provider()
+  local osc52 = require("vim.ui.clipboard.osc52")
+  return {
+    name = "OSC52",
+    copy = {
+      ["+"] = osc52.copy,
+      ["*"] = osc52.copy,
+    },
+    paste = {
+      ["+"] = osc52.paste,
+      ["*"] = osc52.paste,
+    },
+    cache_enabled = true,
+  }
+end
 
 if is_wsl then
   -- WSL clipboard integration via Windows clip.exe
@@ -66,6 +84,10 @@ if is_wsl then
     },
     cache_enabled = true,
   }
+elseif is_docker then
+  -- Docker container - use OSC52 for maximum compatibility
+  -- Works through terminal escape sequences (WezTerm, Alacritty, etc.)
+  vim.g.clipboard = get_osc52_provider()
 elseif has_display then
   -- Native Linux with display - use xclip
   vim.g.clipboard = {
@@ -81,10 +103,10 @@ elseif has_display then
     cache_enabled = true,
   }
 else
-  -- Headless environment (no display) - use internal clipboard only
-  -- No system clipboard provider to avoid errors
-  vim.g.clipboard = nil
-  vim.notify("Running in headless mode - using internal clipboard only", vim.log.levels.INFO)
+  -- Headless environment without WSL/Docker detection - try OSC52 as fallback
+  -- OSC52 is safe to try even if terminal doesn't support it (graceful failure)
+  vim.g.clipboard = get_osc52_provider()
+  vim.notify("Using OSC52 clipboard (terminal-based). If clipboard doesn't work, your terminal may not support OSC52.", vim.log.levels.INFO)
 end
 
 -- Don't use unnamedplus by default - keeps delete/x operations internal
