@@ -218,6 +218,7 @@ COPY git/.gitignore_global /home/gl/.gitignore_global
 COPY podman/.config/containers/ /home/gl/.config/containers/
 COPY opencode/.config/opencode/ /home/gl/.config/opencode/
 COPY codex/.codex/ /home/gl/.codex/
+COPY marimo/.config/marimo/ /home/gl/.config/marimo/
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 6: Extract nvim-data (complete, no .cloning files)
