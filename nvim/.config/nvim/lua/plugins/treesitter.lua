@@ -11,8 +11,9 @@ return {
       -- CRITICAL FOR AIRGAP: Disable auto-install to prevent network access
       -- All parsers are pre-compiled in ~/.local/share/nvim/site/parser/
       auto_install = false,
-      -- Also disable install when missing (for gitcommit parser)
-      ignore_install = {},
+      -- Ignore install for any parsers not in ensure_installed list
+      -- This prevents treesitter from trying to download parsers on filetype detection
+      ignore_install = { "gitcommit" },
       ensure_installed = {
         -- Primary
         "python",

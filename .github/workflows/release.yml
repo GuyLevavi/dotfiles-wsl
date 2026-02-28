@@ -8,37 +8,7 @@ permissions:
   contents: write
 
 jobs:
-  # ── Build Fedora bundle ────────────────────────────────
-  build-fedora:
-    name: Build Fedora bundle
-    runs-on: ubuntu-latest
-    container:
-      image: registry.fedoraproject.org/fedora:43
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install build deps
-        run: dnf install -y curl git tar gzip
-
-      - name: Build Fedora airgap bundle
-        run: |
-          bash airgap/bundle.sh
-          ls -lh airgap/devenv-bundle-*.tar.gz
-          echo ""
-          echo "Bundle size: $(du -h airgap/devenv-bundle-*.tar.gz | cut -f1)"
-
-      - name: Rename bundle for distro
-        run: |
-          BUNDLE=$(ls airgap/devenv-bundle-*.tar.gz | head -1)
-          mv "$BUNDLE" "${BUNDLE%.tar.gz}-fedora.tar.gz"
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: bundle-fedora
-          path: airgap/devenv-bundle-*-fedora.tar.gz
-
-  # ── Build Ubuntu bundle ────────────────────────────────
+  # ── Build Ubuntu bundle with nvim-data ────────────────────────────────
   build-ubuntu:
     name: Build Ubuntu bundle
     runs-on: ubuntu-latest
@@ -50,7 +20,12 @@ jobs:
       - name: Install build deps
         run: |
           apt-get update
-          apt-get install -y curl git tar gzip
+          apt-get install -y --no-install-recommends \
+            curl git tar gzip gcc make nodejs npm ca-certificates stow
+
+      - name: Build nvim data (plugins + compiled libs)
+        run: |
+          bash airgap/prep-ubuntu-nvim.sh
 
       - name: Build Ubuntu airgap bundle
         run: |
@@ -59,7 +34,7 @@ jobs:
           echo ""
           echo "Bundle size: $(du -h airgap/devenv-bundle-*.tar.gz | cut -f1)"
 
-      - name: Rename bundle for distro
+      - name: Rename bundle
         run: |
           BUNDLE=$(ls airgap/devenv-bundle-*.tar.gz | head -1)
           mv "$BUNDLE" "${BUNDLE%.tar.gz}-ubuntu.tar.gz"
@@ -70,17 +45,16 @@ jobs:
           name: bundle-ubuntu
           path: airgap/devenv-bundle-*-ubuntu.tar.gz
 
-  # ── Create release with both bundles ───────────────────
+  # ── Create release with bundle ───────────────────────────────────────
   release:
     name: Create release
-    needs: [build-fedora, build-ubuntu]
+    needs: [build-ubuntu]
     runs-on: ubuntu-latest
     steps:
-      - name: Download all artifacts
+      - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          pattern: bundle-*
-          merge-multiple: true
+          name: bundle-ubuntu
           path: ./bundles
 
       - name: List bundles
@@ -95,18 +69,19 @@ jobs:
           
           # Create release notes
           cat > /tmp/notes.txt << 'EOF'
-          ## Airgap Dev Environment Bundles
+          ## Airgap Dev Environment Bundle
           
-          Choose the bundle matching your target distro:
-          
-          - **Fedora 43**: `devenv-bundle-*-fedora.tar.gz`
-          - **Ubuntu 24.04**: `devenv-bundle-*-ubuntu.tar.gz`
+          Ubuntu 24.04 x86_64
           
           ### Contents
           - 25+ CLI tools (latest versions)
-          - System packages (RPMs for Fedora, DEBs for Ubuntu)
+          - System packages (DEBs)
           - zsh plugins and dotfiles configs
-          - nvim AppImage (universal)
+          - nvim AppImage + all plugins + compiled libraries
+            - blink.cmp with Rust fuzzy matcher
+            - fzf-native for telescope
+            - 33 treesitter parsers
+            - Mason packages (basedpyright, ruff, debugpy, etc.)
           
           ### Usage
           ```bash
@@ -115,15 +90,12 @@ jobs:
           sudo bash airgap/deploy.sh --offline devenv-bundle-*-ubuntu.tar.gz
           ```
           
-          ### Note on nvim plugins
-          nvim plugin data is portable across x86_64 Linux distros.
-          Generate locally if needed:
-          ```bash
-          bash airgap/docker-prep-nvim.sh
-          ```
+          ### Verified
+          - Works offline (no network required at runtime)
+          - Tested in Docker with --network none
           EOF
           
-          # Create or update release with both bundles
+          # Create or update release with bundle
           gh release create "$TAG" ./bundles/*.tar.gz \
             --title "$TAG" \
             --notes-file /tmp/notes.txt \

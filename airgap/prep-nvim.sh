@@ -42,6 +42,14 @@ export XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
 export XDG_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
 
+# Check for build dependencies
+log "Checking build dependencies..."
+for cmd in gcc make curl; do
+    if ! command -v $cmd &>/dev/null; then
+        warn "$cmd not found - some builds may fail"
+    fi
+done
+
 # Use zig cc for treesitter compilation if available
 ZIG_PATH=""
 if [[ -f "$HOME/.local/bin/zig" ]]; then
@@ -157,18 +165,34 @@ if [[ -d "$BLINK_PATH" ]]; then
         # Install Rust temporarily if not present
         if ! command -v cargo &>/dev/null; then
             log "Installing Rust via rustup..."
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+            if command -v curl &>/dev/null; then
+                curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable 2>&1 || {
+                    warn "Failed to install Rust - blink.cmp will use Lua fallback"
+                }
+            else
+                warn "curl not available - cannot install Rust"
+            fi
+        fi
+        
+        # Source cargo env if it exists
+        if [[ -f "$HOME/.cargo/env" ]]; then
             source "$HOME/.cargo/env"
         fi
         
         # Compile the library
         if command -v cargo &>/dev/null; then
             cd "$BLINK_PATH"
-            cargo build --release 2>&1 | head -20
-            if [[ -f "target/release/libblinkcmp_fuzzy.so" ]] || [[ -f "target/release/libblinkcmp_fuzzy.dylib" ]]; then
-                ok "blink.cmp Rust library compiled successfully"
+            log "Running cargo build --release..."
+            if cargo build --release 2>&1; then
+                if [[ -f "target/release/libblinkcmp_fuzzy.so" ]] || [[ -f "target/release/libblinkcmp_fuzzy.dylib" ]]; then
+                    ok "blink.cmp Rust library compiled successfully"
+                else
+                    # Check for alternative library names
+                    ls -la target/release/*.so target/release/*.dylib 2>/dev/null || true
+                    warn "Cargo build succeeded but library not found"
+                fi
             else
-                warn "Failed to compile blink.cmp Rust library - will use Lua fallback"
+                warn "Cargo build failed - blink.cmp will use Lua fallback"
             fi
         else
             warn "Rust not available - blink.cmp will use Lua fallback"

@@ -54,20 +54,38 @@ local is_wayland = vim.env.WAYLAND_DISPLAY ~= nil
 local has_display = is_x11 or is_wayland
 
 if is_wsl then
-  -- WSL clipboard integration via Windows clip.exe
-  -- Works even in headless WSL because clip.exe talks to Windows
-  vim.g.clipboard = {
-    name = "WslClipboard",
-    copy = {
-      ["+"] = "clip.exe",
-      ["*"] = "clip.exe",
-    },
-    paste = {
-      ["+"] = 'powershell.exe -NoProfile -c "Get-Clipboard | Write-Host -NoNewline"',
-      ["*"] = 'powershell.exe -NoProfile -c "Get-Clipboard | Write-Host -NoNewline"',
-    },
-    cache_enabled = true,
-  }
+  -- WSL clipboard: prefer win32yank.exe (works with Ghostty), fallback to clip.exe
+  -- win32yank.exe MUST be on Windows filesystem, symlinked from WSL
+  -- Install on Windows: winget install win32yank
+  -- Or symlink from Neovim Windows: ln -s "/mnt/c/Program Files/Neovim/bin/win32yank.exe" ~/.local/bin/win32yank.exe
+  if vim.fn.executable("win32yank.exe") == 1 then
+    vim.g.clipboard = {
+      name = "win32yank-wsl",
+      copy = {
+        ["+"] = "win32yank.exe -i --crlf",
+        ["*"] = "win32yank.exe -i --crlf",
+      },
+      paste = {
+        ["+"] = "win32yank.exe -o --lf",
+        ["*"] = "win32yank.exe -o --lf",
+      },
+      cache_enabled = 0,  -- CRITICAL: cache_enabled=1 causes ~10 second delays
+    }
+  else
+    -- Fallback: clip.exe (works but only copies, can't paste)
+    vim.g.clipboard = {
+      name = "WslClipboard",
+      copy = {
+        ["+"] = "clip.exe",
+        ["*"] = "clip.exe",
+      },
+      paste = {
+        ["+"] = 'powershell.exe -NoProfile -c "Get-Clipboard | Write-Host -NoNewline"',
+        ["*"] = 'powershell.exe -NoProfile -c "Get-Clipboard | Write-Host -NoNewline"',
+      },
+      cache_enabled = true,
+    }
+  end
 elseif is_x11 then
   -- Native Linux with X11 - use xclip
   vim.g.clipboard = {

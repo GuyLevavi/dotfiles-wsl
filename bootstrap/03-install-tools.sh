@@ -408,6 +408,25 @@ else
     fi
 fi
 
+# ===== WSL-specific: win32yank clipboard integration =====
+# win32yank.exe provides better clipboard support than clip.exe in WSL/Ghostty
+# It must live on the Windows filesystem, not copied into WSL rootfs
+if [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
+    echo "==> WSL detected — setting up win32yank clipboard"
+    # Try to create symlink from Windows Neovim installation
+    if [[ -f "/mnt/c/Program Files/Neovim/bin/win32yank.exe" ]]; then
+        ln -sf "/mnt/c/Program Files/Neovim/bin/win32yank.exe" "${BIN}/win32yank.exe"
+        echo "   Linked win32yank.exe from Neovim Windows installation"
+    # Also check winget default install location
+    elif [[ -f "/mnt/c/Program Files/Win32Yank/win32yank.exe" ]]; then
+        ln -sf "/mnt/c/Program Files/Win32Yank/win32yank.exe" "${BIN}/win32yank.exe"
+        echo "   Linked win32yank.exe from winget installation"
+    else
+        echo "   win32yank.exe not found — using clip.exe fallback"
+        echo "   To enable: install with 'winget install win32yank' on Windows"
+    fi
+fi
+
 # ===== Summary =====
 echo ""
 echo "All tools installed to ${BIN}"
