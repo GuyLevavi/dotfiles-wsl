@@ -1,0 +1,43 @@
+# Marimo Configuration
+# ===================
+# Marimo is a reactive Python notebook that runs in the browser.
+# This config sets up the environment for ML/CV work.
+
+[display]
+# Tokyo Night dark theme to match nvim/starship
+# Options: "light", "dark", "system"
+theme = "dark"
+
+# Use JetBrainsMono Nerd Font (installed system-wide)
+font_family = "JetBrainsMono Nerd Font Mono"
+font_size = 14
+
+# Code editor settings
+show_code = true
+show_output = true
+
+[keybindings]
+# Enable vim mode for the code editor (matches nvim config)
+vim_mode = true
+
+[server]
+# Bind to all interfaces for Docker accessibility
+# Use --host flag to override: marimo edit --host 127.0.0.0.1
+host = "0.0.0.0"
+port = 2718
+
+# Allow connections from any origin (needed for Docker port forwarding)
+allow_origins = ["*"]
+
+# Disable browser auto-open (won't work in Docker anyway)
+open_browser = false
+
+[runtime]
+# Automatically reload when file changes (disable in airgap if problematic)
+auto_reload = false
+
+# Show variables in the side panel
+show_variables = true
+
+# Output settings
+max_output_height = 500

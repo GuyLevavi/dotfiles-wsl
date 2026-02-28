@@ -102,3 +102,29 @@ vim.keymap.set("n", "<leader>dd", '"+dd', { desc = "Cut line to system clipboard
 -- Paste from system clipboard
 vim.keymap.set({ "n", "v" }, "<leader>p", '"+p', { desc = "Paste from system clipboard" })
 vim.keymap.set({ "n", "v" }, "<leader>P", '"+P', { desc = "Paste before from system clipboard" })
+
+-- ═════════════════════════════════════════════════════════════════════
+-- AUTOSAVE CONFIGURATION
+-- ═════════════════════════════════════════════════════════════════════
+-- Auto-save buffers when leaving insert mode or changing buffers
+-- but DO NOT auto-format on save (formatting is manual with <leader>cf)
+
+-- Enable auto-write (save when switching buffers, leaving insert, etc.)
+opt.autowrite = true
+opt.autowriteall = true
+
+-- Disable autoformat on save
+-- Formatting is controlled by conform.nvim and will be manual only
+vim.g.autoformat = false
+
+-- Set up auto-save trigger on insert mode leave and text changes
+vim.api.nvim_create_autocmd({ "InsertLeave", "TextChanged" }, {
+  pattern = "*",
+  callback = function()
+    -- Only save if buffer is modified and not read-only
+    if vim.bo.modified and not vim.bo.readonly and vim.fn.expand("%") ~= "" then
+      vim.api.nvim_command("silent! write")
+    end
+  end,
+  desc = "Auto-save on insert leave and text change",
+})

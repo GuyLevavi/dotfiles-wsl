@@ -22,9 +22,18 @@ RUN apt-get update && \
         sudo curl ca-certificates git zsh tmux locales \
         unzip xz-utils bzip2 build-essential \
         python3-dev libffi-dev libssl-dev \
-        npm nodejs ipython3 && \
+        npm nodejs ipython3 \
+        xclip xsel && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+# Generate UTF-8 locales for btop and proper Unicode support
+RUN locale-gen en_US.UTF-8 && \
+    update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+ENV LANGUAGE=en_US:en
 
 # Create user 'gl'
 RUN groupadd -g 1001 gl 2>/dev/null || true && \

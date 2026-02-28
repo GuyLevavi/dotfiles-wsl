@@ -41,17 +41,29 @@ return {
     "mfussenegger/nvim-dap-python",
     ft = "python",
     config = function()
-      -- Use the active venv's Python instead of mason's debugpy-adapter.
-      -- This ensures debugpy runs in the same env as your project.
-      local python_path = vim.fn.exepath("python3") or vim.fn.exepath("python") or "python3"
-      local venv = os.getenv("VIRTUAL_ENV") or os.getenv("CONDA_PREFIX")
-      if venv then
-        local venv_python = venv .. "/bin/python"
-        if vim.fn.executable(venv_python) == 1 then
-          python_path = venv_python
-        end
+      -- Find debugpy from Mason installation
+      local mason_registry = require("mason-registry")
+      local debugpy_path = nil
+      
+      if mason_registry.is_installed("debugpy") then
+        local debugpy_pkg = mason_registry.get_package("debugpy")
+        debugpy_path = debugpy_pkg:get_install_path() .. "/venv/bin/python"
       end
-      require("dap-python").setup(python_path)
+      
+      -- Fallback to system python if debugpy not found in Mason
+      if not debugpy_path or vim.fn.executable(debugpy_path) ~= 1 then
+        local python_path = vim.fn.exepath("python3") or vim.fn.exepath("python") or "python3"
+        local venv = os.getenv("VIRTUAL_ENV") or os.getenv("CONDA_PREFIX")
+        if venv then
+          local venv_python = venv .. "/bin/python"
+          if vim.fn.executable(venv_python) == 1 then
+            python_path = venv_python
+          end
+        end
+        debugpy_path = python_path
+      end
+      
+      require("dap-python").setup(debugpy_path)
 
       -- Add custom launch configurations
       local dap = require("dap")
