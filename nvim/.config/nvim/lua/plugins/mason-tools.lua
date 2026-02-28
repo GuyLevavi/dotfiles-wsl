@@ -10,7 +10,7 @@ return {
   -- First: Override mason-lspconfig to disable ALL auto-installation
   -- This must come AFTER the extras to take effect
   {
-    "williamboman/mason-lspconfig.nvim",
+    "mason-org/mason-lspconfig.nvim",
     opts = function(_, opts)
       -- Completely disable automatic installation
       -- This overrides any settings from LazyVim extras
