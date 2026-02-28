@@ -138,6 +138,7 @@ if [[ ! -d "${BUILD_HOME}/.config/nvim" ]]; then
     fi
     
     rm -rf "$TEMP_DOTFILES"
+    cd "$BUILD_HOME"  # Return to safe directory after deleting temp
 fi
 
 ok "Nvim config ready"
