@@ -691,3 +691,49 @@ Location: `airgap/devenv-bundle-20260228.tar.gz`
 4. **Headless Tests** - Create automated test suite for Python tooling (optional)
 
 ---
+
+### Additional Hotfixes (2026-02-28)
+
+#### 14. DAP Debugger Crash Fix
+**Problem**: `get_install_path()` failed on line 50, causing DAP to crash entirely.
+
+**Fix**: 
+- Wrapped all Mason registry calls in `pcall()` for error handling
+- Added graceful fallback chain: Mason debugpy → system Python
+- Wrapped `dap-python.setup()` in pcall to prevent hard failures
+- Verified: DAP now loads successfully with 6 Python configurations
+
+**Files**: `nvim/.config/nvim/lua/plugins/python.lua`
+
+#### 15. Clipboard Headless Mode Fix  
+**Problem**: xclip errors in headless WSL/RunAI contexts ("can't find display").
+
+**Fix**:
+- Detect headless context (no DISPLAY and not WSL)
+- In headless: use internal nvim clipboard only (no system integration)
+- In WSL: use clip.exe (works headless via Windows)
+- Only set clipboard keymaps when provider is available
+- Shows notification: "Running in headless mode - using internal clipboard only"
+
+**Files**: `nvim/.config/nvim/lua/config/options.lua`
+
+#### 16. WSL Airgap Documentation Fix
+**Problem**: README only showed Docker airgap, implied WSL was deprecated.
+
+**Fix**:
+- Restored WSL airgap as Method 2 (alongside Docker Method 1)
+- Clarified: Docker for containers/RunAI, WSL for WSL2 environments
+- Both methods fully supported
+
+**Files**: `README.md`
+
+#### 17. GitHub Release Bundle v1.8.1
+**Problem**: GitHub releases still showed v1.8.0 from two days ago.
+
+**Fix**:
+- Created GitHub release v1.8.1
+- Uploaded `devenv-bundle-20260228.tar.gz` (516MB)
+- Release includes full changelog and usage instructions
+- URL: https://github.com/GuyLevavi/dotfiles-wsl/releases/tag/v1.8.1
+
+---
