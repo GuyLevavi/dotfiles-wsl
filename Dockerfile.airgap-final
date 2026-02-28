@@ -89,6 +89,29 @@ RUN echo "Installing CLI tools..." && \
     cp jf mc /usr/local/bin/ 2>/dev/null || true && \
     chmod +x /usr/local/bin/jf /usr/local/bin/mc 2>/dev/null || true && \
     \
+    # Extract btop from tbz2 archive \
+    if [ -f btop.tbz ]; then \
+        echo "Installing btop..." && \
+        mkdir -p /tmp/btop && tar -xjf btop.tbz -C /tmp/btop 2>/dev/null && \
+        if [ -f /tmp/btop/btop/btop ]; then \
+            cp /tmp/btop/btop/btop /usr/local/bin/ && \
+            chmod +x /usr/local/bin/btop; \
+        fi && \
+        rm -rf /tmp/btop; \
+    fi && \
+    \
+    # Extract lnav from zip archive \
+    if [ -f lnav.zip ]; then \
+        echo "Installing lnav..." && \
+        mkdir -p /tmp/lnav && unzip -o lnav.zip -d /tmp/lnav 2>/dev/null && \
+        LNAV_DIR=$(find /tmp/lnav -type d -name "lnav-*" | head -1) && \
+        if [ -n "$LNAV_DIR" ] && [ -f "$LNAV_DIR/lnav" ]; then \
+            cp "$LNAV_DIR/lnav" /usr/local/bin/ && \
+            chmod +x /usr/local/bin/lnav; \
+        fi && \
+        rm -rf /tmp/lnav; \
+    fi && \
+    \
     # Extract yazi from zip \
     if [ -f yazi.zip ]; then \
         echo "Installing yazi..." && \
@@ -229,6 +252,49 @@ RUN echo "Installing pytest..." && \
     VIRTUAL_ENV=/home/gl/.venvs/main /usr/local/bin/uv pip install pytest pytest-asyncio && \
     ln -sf /home/gl/.venvs/main/bin/pytest /home/gl/.local/bin/pytest && \
     /home/gl/.local/bin/pytest --version
+
+# Install Python CLI tools from wheels (airgap offline mode)
+RUN echo "Installing Python CLI tools from bundle wheels..." && \
+    if [ -d /tmp/bundle/cache/wheels ] && [ "$(ls -A /tmp/bundle/cache/wheels/*.whl 2>/dev/null | wc -l)" -gt 0 ]; then \
+        echo "Found wheels in bundle, installing..." && \
+        WHEELS_DIR=/tmp/bundle/cache/wheels && \
+        \
+        # Install marimo if wheel exists \
+        if ls $WHEELS_DIR/marimo*.whl 1>/dev/null 2>&1; then \
+            echo "Installing marimo..." && \
+            /usr/local/bin/uv tool install --find-links $WHEELS_DIR marimo 2>&1 || echo "  marimo install skipped (may need more deps)"; \
+        else \
+            echo "  marimo wheels not found in bundle"; \
+        fi && \
+        \
+        # Install posting if wheel exists \
+        if ls $WHEELS_DIR/posting*.whl 1>/dev/null 2>&1; then \
+            echo "Installing posting..." && \
+            /usr/local/bin/uv tool install --find-links $WHEELS_DIR posting 2>&1 || echo "  posting install skipped (may need more deps)"; \
+        else \
+            echo "  posting wheels not found in bundle"; \
+        fi && \
+        \
+        # Install jupyter if wheel exists (heavy, many deps) \
+        if ls $WHEELS_DIR/jupyter*.whl 1>/dev/null 2>&1; then \
+            echo "Installing jupyter..." && \
+            /usr/local/bin/uv tool install --find-links $WHEELS_DIR jupyter 2>&1 || echo "  jupyter install skipped (may need more deps)"; \
+        else \
+            echo "  jupyter wheels not found in bundle"; \
+        fi && \
+        \
+        # Install harlequin if wheel exists \
+        if ls $WHEELS_DIR/harlequin*.whl 1>/dev/null 2>&1; then \
+            echo "Installing harlequin..." && \
+            /usr/local/bin/uv tool install --find-links $WHEELS_DIR harlequin 2>&1 || echo "  harlequin install skipped (may need more deps)"; \
+        else \
+            echo "  harlequin wheels not found in bundle"; \
+        fi && \
+        \
+        echo "Python CLI tools installation complete"; \
+    else \
+        echo "No wheels directory found in bundle, skipping Python tool installation"; \
+    fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 8: Final Setup

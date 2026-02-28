@@ -190,6 +190,8 @@ if command -v pip3 &>/dev/null && ! $DRY_RUN; then
     pip3 download harlequin-postgres --only-binary :all: -d "$WHEEL_DIR" 2>/dev/null || true
     pip3 download posting --only-binary :all: -d "$WHEEL_DIR" 2>/dev/null || true
     pip3 download marimo --only-binary :all: -d "$WHEEL_DIR" 2>/dev/null || true
+    pip3 download jupyter --only-binary :all: -d "$WHEEL_DIR" 2>/dev/null || true
+    pip3 download jupytext --only-binary :all: -d "$WHEEL_DIR" 2>/dev/null || true
     pip3 download pytest --only-binary :all: -d "$WHEEL_DIR" 2>/dev/null || true
     WHEEL_COUNT=$(ls "$WHEEL_DIR"/*.whl 2>/dev/null | wc -l)
     if [[ $WHEEL_COUNT -gt 0 ]]; then
