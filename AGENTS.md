@@ -198,3 +198,381 @@ Use full path for `gh` commands.
 - User explicitly asks for commits — don't commit proactively
 - Install latest versions of tools by default
 - After changes, user wants PR created and pushed
+
+## Airgap TODO & Strategies (Current Sprint)
+
+### Overview
+The airgap container is working but has several issues to fix for production use in WSL and RunAI environments.
+
+---
+
+### 1. CI/CD Cleanup
+
+**Problem**: Fedora tests in CI are irrelevant since we only need Ubuntu bundles for airgap.
+
+**Action**: Remove Fedora-related CI jobs:
+- Delete `stow-dry-run` job (Fedora 43)
+- Delete `airgap-integration` job (Fedora 43) 
+- Keep only Ubuntu Docker build test
+- Keep fast checks (shellcheck, lua-syntax, config-syntax, stow-structure)
+
+**Files**: `.github/workflows/pr-tests.yml`
+
+---
+
+### 2. Bundle Reference Update
+
+**Problem**: AGENTS.md still references old bundle `devenv-bundle-20260226-ubuntu.tar.gz`, but we now use `devenv-bundle-20260228.tar.gz`.
+
+**Action**: Update all documentation references to the new bundle name.
+
+**Files**: `AGENTS.md`, `Dockerfile.airgap-complete`, `Dockerfile.airgap-offline`
+
+---
+
+### 3. Blink.cmp Toggle Without Network
+
+**Problem**: User disabled blink.lua in lazy but wants to keep it. Re-enabling causes GitHub network access attempt.
+
+**Root Cause**: Lazy.nvim checks for updates when plugins are enabled/disabled, and blink.cmp has GitHub URLs in its spec.
+
+**Strategy**:
+```lua
+-- In lazy.lua, add to performance.rtp:
+disabled_plugins = {}, -- Keep empty, don't disable blink
+
+-- In blink.lua, add airgap-aware toggle:
+{
+  "saghen/blink.cmp",
+  -- Add local path to prevent GitHub lookup in airgap
+  dir = vim.fn.stdpath("data") .. "/lazy/blink.cmp",
+  -- Disable auto-update checking
+  pin = true,
+  -- Rest of config...
+}
+```
+
+**Key Insight**: Lazy has `pin = true` option to prevent update checks on individual plugins. Also can use `dev = true` for local development.
+
+**Files**: `nvim/.config/nvim/lua/plugins/blink.lua`, `nvim/.config/nvim/lua/config/lazy.lua`
+
+---
+
+### 4. Nvim Clipboard Configuration
+
+**Problem**: No clipboard providers. Need delete in internal nvim clipboard, yank/copy to system clipboard (Windows accessible).
+
+**Requirements**:
+- Delete (`dd`, `x`) → internal nvim clipboard only
+- Yank (`yy`, `y`) → system clipboard (accessible from Windows)
+- Works in WSL with Windows clipboard integration
+
+**Strategy**:
+```lua
+-- In nvim/.config/nvim/lua/config/options.lua:
+-- WSL clipboard integration via OSC52 or win32yank
+vim.g.clipboard = {
+  name = 'WslClipboard',
+  copy = {
+    ['+'] = 'clip.exe',
+    ['*'] = 'clip.exe',
+  },
+  paste = {
+    ['+'] = 'powershell.exe -c [Console]::Out.Write($(Get-Clipboard -Raw).tostring().replace("`r", ""))',
+    ['*'] = 'powershell.exe -c [Console]::Out.Write($(Get-Clipboard -Raw).tostring().replace("`r", ""))',
+  },
+  cache_enabled = true,
+}
+
+-- Don't use unnamedplus by default (keeps delete internal)
+vim.opt.clipboard = ""  
+
+-- Map yank to use system clipboard
+vim.keymap.set({"n", "v"}, "y", "\"+y", { desc = "Yank to system clipboard" })
+vim.keymap.set("n", "yy", "\"+yy", { desc = "Yank line to system clipboard" })
+vim.keymap.set("n", "Y", "\"+Y", { desc = "Yank to EOL to system clipboard" })
+
+-- Keep delete/x/cut internal (no mapping needed, default behavior)
+```
+
+**Alternative for pure Linux airgap**:
+- Use `xclip` or `xsel` if available
+- Otherwise rely on terminal OSC52 escape sequences (modern terminals support this)
+
+**Files**: `nvim/.config/nvim/lua/config/options.lua`, `nvim/.config/nvim/lua/config/keymaps.lua` (create if doesn't exist)
+
+---
+
+### 5. Treesitter Gitcommit Parser Download
+
+**Problem**: Treesitter tries to download gitcommit parser even though it's in ensure_installed.
+
+**Root Cause**: Treesitter's auto-install feature triggers on filetype detection, even when parser is pre-compiled.
+
+**Strategy**:
+```lua
+-- In treesitter.lua, disable auto_install:
+{
+  "nvim-treesitter/nvim-treesitter",
+  opts = {
+    auto_install = false,  -- Critical for airgap
+    ensure_installed = { ... },  -- Keep the list
+  },
+}
+```
+
+**Also need to check**: If parsers are in the right location (`~/.local/share/nvim/site/parser/`).
+
+**Files**: `nvim/.config/nvim/lua/plugins/treesitter.lua`
+
+---
+
+### 6. Python Autocomplete (Class/Variable Names)
+
+**Problem**: Snippets work but autocomplete for class/variable names doesn't. User sees "bad LLM completions" (likely buffer-based).
+
+**Root Cause**: Basedpyright LSP should provide semantic completion, but may not be configured correctly or isn't attached to the buffer.
+
+**Strategy**:
+1. Verify basedpyright is attached: `:LspInfo` in a Python file
+2. Check if ruff is conflicting (ruff has basic completion too)
+3. Ensure basedpyright settings enable completion:
+```lua
+-- In python.lua, verify:
+basedpyright = {
+  settings = {
+    python = {
+      analysis = {
+        autoImportCompletions = true,
+        autoSearchPaths = true,
+        useLibraryCodeForTypes = true,
+        diagnosticMode = "openFilesOnly",
+      },
+    },
+  },
+}
+```
+
+4. Check blink.cmp LSP source is properly configured:
+```lua
+-- In blink.lua, ensure LSP is in default sources:
+sources = {
+  default = { "lsp", "path", "snippets" },
+  -- NOT { "buffer", "lsp" } which would give bad completions
+}
+```
+
+**Debug Steps**:
+```bash
+# In container:
+nvim --headless -c 'lua print(vim.inspect(vim.lsp.get_active_clients()))' -c 'qa'
+nvim --headless -c 'lua print(vim.inspect(require("lazy.core.config").spec.plugins["blink.cmp"]))' -c 'qa'
+```
+
+**Files**: `nvim/.config/nvim/lua/plugins/python.lua`, `nvim/.config/nvim/lua/plugins/blink.lua`
+
+---
+
+### 7. Telescope Workspace Symbols
+
+**Problem**: Telescope says "method workspace/symbol is not supported by any of the servers..."
+
+**Root Cause**: Basedpyright may not have workspace symbol support enabled, or telescope is trying before LSP is attached.
+
+**Strategy**:
+1. Check if basedpyright supports workspace symbols (it should)
+2. Add explicit configuration:
+```lua
+-- In python.lua or editor.lua:
+basedpyright = {
+  settings = {
+    python = {
+      analysis = {
+        -- Enable all analysis features
+        typeCheckingMode = "basic",
+        autoSearchPaths = true,
+        useLibraryCodeForTypes = true,
+        diagnosticMode = "openFilesOnly",
+        -- These help with workspace symbols
+        extraPaths = {},
+        stubPath = "",
+      },
+    },
+  },
+}
+```
+
+3. Alternative: Use document symbols instead:
+```lua
+-- In editor.lua, change keymap:
+["<leader>sP"] = {
+  function()
+    require("telescope.builtin").lsp_document_symbols({
+      symbols = { "Class", "Function", "Method" },
+    })
+  end,
+  desc = "Search Python symbols in current file",
+}
+```
+
+**Files**: `nvim/.config/nvim/lua/plugins/editor.lua`, `nvim/.config/nvim/lua/plugins/python.lua`
+
+---
+
+### 8. Headless Python Tooling Tests
+
+**Problem**: Need automated tests to verify Python tooling works in airgap.
+
+**Strategy**: Create test script that runs in CI or locally:
+```bash
+#!/bin/bash
+# tests/python-tools.sh
+
+docker run --network none --rm airgap-dev:latest zsh -c '
+  set -e
+  echo "=== Python LSP Tests ==="
+  
+  # Test basedpyright installation
+  test -f ~/.local/share/nvim/mason/packages/basedpyright/venv/bin/basedpyright
+  echo "✓ basedpyright installed"
+  
+  # Test ruff
+  test -f ~/.local/share/nvim/mason/packages/ruff/venv/bin/ruff
+  echo "✓ ruff installed"
+  
+  # Test debugpy
+  test -f ~/.local/share/nvim/mason/packages/debugpy/venv/bin/python
+  echo "✓ debugpy installed"
+  
+  # Test Python versions
+  python3.10 --version
+  python3.11 --version  
+  python3.12 --version
+  echo "✓ Python versions work"
+  
+  # Test pytest
+  pytest --version
+  echo "✓ pytest works"
+  
+  # Create test Python file and verify nvim can open with LSP
+  echo "print(\"test\")" > /tmp/test.py
+  timeout 5 nvim --headless /tmp/test.py -c "sleep 2" -c "qa" 2>/dev/null || true
+  echo "✓ nvim opens Python files"
+  
+  echo ""
+  echo "All Python tooling tests passed!"
+'
+```
+
+**Files**: Create `tests/python-tools.sh`
+
+---
+
+### 9. Marimo Tutorial Port Access
+
+**Problem**: `marimo tutorial intro` exposes port but can't access it from outside container.
+
+**Root Cause**: Marimo likely binds to localhost (127.0.0.1) inside container, making it inaccessible from host even with port mapping.
+
+**Strategy**:
+```bash
+# When running container, expose all ports:
+docker run -p 8080:8080 -p 2718:2718 --name airgap-dev airgap-dev
+
+# Inside container, start marimo with explicit host:
+marimo tutorial intro --host 0.0.0.0 --port 8080
+
+# Or for edit mode:
+marimo edit --host 0.0.0.0 --port 8080
+```
+
+**Dockerfile Update** (expose ports):
+```dockerfile
+EXPOSE 8080 2718
+```
+
+**Documentation**: Add to README
+```markdown
+## Using Marimo
+
+```bash
+# Start container with port forwarding
+docker run -it -p 8080:8080 -p 2718:2718 airgap-dev zsh
+
+# Inside container, start marimo
+marimo tutorial intro --host 0.0.0.0 --port 8080
+
+# Access from Windows browser:
+http://localhost:8080
+```
+```
+
+**Files**: `Dockerfile.airgap-final`, `README.md`
+
+---
+
+### 10. Document Airgap Nvim/Lazy Usage
+
+**Problem**: Need clear documentation on how to use nvim in airgap (plugins already installed, no network).
+
+**Key Points to Document**:
+
+1. **Pre-installed State**: All 50 plugins are already in `~/.local/share/nvim/lazy/`
+2. **No Network Required**: Lazy checker is disabled (`checker = { enabled = false }`)
+3. **Mason Packages**: 12 packages pre-installed in `~/.local/share/nvim/mason/packages/`
+4. **Treesitter Parsers**: 33 parsers compiled in `~/.local/share/nvim/site/parser/`
+
+**What NOT to do in airgap**:
+- Don't run `:Lazy sync` (will try to update from GitHub)
+- Don't run `:MasonInstall` (will try to download)
+- Don't run `:TSInstall` (will try to compile/download)
+
+**What TO do**:
+- Start nvim normally: `nvim`
+- Use plugins as usual - they're already there
+- Add new plugins by placing them in `nvim/.config/nvim/lua/plugins/` BEFORE building the Docker image
+
+**README Section to Add**:
+```markdown
+## Airgap Neovim Usage
+
+When working offline, all plugins are pre-installed. Do NOT run update commands:
+
+**DON'T** (requires network):
+- `:Lazy sync` - tries to update plugins from GitHub
+- `:MasonInstall <package>` - tries to download LSP tools  
+- `:TSInstall <parser>` - tries to compile/download parsers
+
+**DO**:
+- Just run `nvim` - everything is ready
+- Use `<leader>ff` for telescope file finder
+- Use `<leader>fg` for live grep
+- Python LSP (basedpyright) is ready to go
+
+If you need to add new plugins:
+1. Add plugin spec to `nvim/.config/nvim/lua/plugins/`
+2. Rebuild Docker image with network access
+3. The new plugin will be baked into the image
+```
+
+**Files**: `README.md`
+
+---
+
+## Implementation Priority
+
+**Phase 1 (Critical)**:
+1. CI cleanup (remove Fedora tests)
+2. Bundle reference update
+3. Clipboard configuration
+4. Python autocomplete fix
+5. Documentation update
+
+**Phase 2 (Important)**:
+6. Treesitter gitcommit fix
+7. Telescope workspace symbols
+8. Blink toggle mechanism
+9. Python tooling tests
+10. Marimo port exposure
+
+**Estimated Time**: 2-3 hours for Phase 1, 1-2 hours for Phase 2.
