@@ -40,7 +40,7 @@ RUN groupadd -g 1001 gl 2>/dev/null || true && \
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Copy GitHub bundle (Ubuntu with all CLI tools)
-COPY airgap/devenv-bundle-20260226-ubuntu.tar.gz /tmp/bundle.tar.gz
+COPY airgap/devenv-bundle-20260228.tar.gz /tmp/bundle.tar.gz
 
 # Copy fresh nvim-data (regenerated with all plugins, no .cloning files)
 COPY airgap/cache/nvim-data.tar.gz /tmp/
