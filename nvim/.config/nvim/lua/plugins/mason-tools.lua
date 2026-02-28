@@ -43,15 +43,19 @@ return {
   {
     "williamboman/mason-lspconfig.nvim",
     opts = {
-      -- Only install servers we explicitly want, don't auto-install
-      automatic_installation = {
-        exclude = {
-          "pyright", -- We use basedpyright
-          "docker_compose_language_service", -- Not needed
-          "lua_ls", -- Lua language server not needed
-          "marksman", -- Markdown LSP not needed
-        },
-      },
+      -- Completely disable automatic installation
+      -- We manage all LSP installations manually above
+      automatic_installation = false,
+    },
+  },
+
+  -- Disable mason-nvim-dap auto-install (we handle debugpy manually)
+  {
+    "jay-babu/mason-nvim-dap.nvim",
+    opts = {
+      -- Disable auto-install of debug adapters
+      automatic_installation = false,
+      ensure_installed = {},
     },
   },
 }

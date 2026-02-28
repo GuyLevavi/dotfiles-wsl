@@ -777,3 +777,26 @@ Location: `airgap/devenv-bundle-20260228.tar.gz`
 **Files**: `tmux/.config/tmux/tmux.conf`
 
 ---
+
+## GitHub Container Registry (GHCR) Token
+
+### Token Location
+**Local file**: `/home/gl/.ghcr_token`
+
+**Security Notes**:
+- Token has `write:packages` and `read:packages` scopes
+- File has chmod 600 (readable only by owner)
+- Never commit this token to git
+- Token is for pushing Docker images to GHCR only
+
+### Usage
+```bash
+# Login to GHCR
+docker login ghcr.io -u GuyLevavi --password-stdin < /home/gl/.ghcr_token
+
+# Tag and push
+docker tag airgap-dev:latest ghcr.io/guylevavi/airgap-dev:latest
+docker push ghcr.io/guylevavi/airgap-dev:latest
+```
+
+---

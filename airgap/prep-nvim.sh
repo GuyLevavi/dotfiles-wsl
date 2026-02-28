@@ -145,6 +145,39 @@ else
     warn "mason-tool-installer.nvim plugin NOT found"
 fi
 
+log "Step 5b: Compile blink.cmp Rust library..."
+# blink.cmp requires a native Rust library for fuzzy matching
+BLINK_PATH="${NVIM_DATA}/lazy/blink.cmp"
+if [[ -d "$BLINK_PATH" ]]; then
+    # Check if already compiled
+    if [[ -f "$BLINK_PATH/target/release/libblinkcmp_fuzzy.so" ]] || [[ -f "$BLINK_PATH/target/release/libblinkcmp_fuzzy.dylib" ]]; then
+        ok "blink.cmp Rust library already compiled"
+    else
+        log "Installing Rust and compiling blink.cmp library..."
+        # Install Rust temporarily if not present
+        if ! command -v cargo &>/dev/null; then
+            log "Installing Rust via rustup..."
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+            source "$HOME/.cargo/env"
+        fi
+        
+        # Compile the library
+        if command -v cargo &>/dev/null; then
+            cd "$BLINK_PATH"
+            cargo build --release 2>&1 | head -20
+            if [[ -f "target/release/libblinkcmp_fuzzy.so" ]] || [[ -f "target/release/libblinkcmp_fuzzy.dylib" ]]; then
+                ok "blink.cmp Rust library compiled successfully"
+            else
+                warn "Failed to compile blink.cmp Rust library - will use Lua fallback"
+            fi
+        else
+            warn "Rust not available - blink.cmp will use Lua fallback"
+        fi
+    fi
+else
+    warn "blink.cmp not found at $BLINK_PATH"
+fi
+
 # Verify LazyVim
 if [[ -d "${NVIM_DATA}/lazy/LazyVim" ]]; then
     ok "LazyVim installed"
@@ -157,6 +190,27 @@ if [[ -d "${NVIM_DATA}/lazy/iron.nvim" ]]; then
     ok "iron.nvim installed"
 else
     warn "iron.nvim NOT found"
+fi
+
+log "Step 5c: Compile fzf-native for telescope..."
+# telescope-fzf-native requires compilation for performance
+FZF_NATIVE_PATH="${NVIM_DATA}/lazy/telescope-fzf-native.nvim"
+if [[ -d "$FZF_NATIVE_PATH" ]]; then
+    if [[ -f "$FZF_NATIVE_PATH/build/libfzf.so" ]] || [[ -f "$FZF_NATIVE_PATH/build/libfzf.dylib" ]]; then
+        ok "fzf-native already compiled"
+    else
+        log "Compiling fzf-native..."
+        cd "$FZF_NATIVE_PATH"
+        make clean 2>/dev/null || true
+        make 2>&1 | head -20
+        if [[ -f "build/libfzf.so" ]] || [[ -f "build/libfzf.dylib" ]]; then
+            ok "fzf-native compiled successfully"
+        else
+            warn "Failed to compile fzf-native - telescope will use slower fallback"
+        fi
+    fi
+else
+    warn "telescope-fzf-native.nvim not found"
 fi
 
 log "Step 6: Create bundles..."
