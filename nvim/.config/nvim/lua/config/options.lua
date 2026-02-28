@@ -40,17 +40,20 @@ vim.g.loaded_perl_provider = 0
 vim.g.loaded_node_provider = 0
 
 -- ═════════════════════════════════════════════════════════════════════
--- CLIPBOARD CONFIGURATION FOR WSL/Windows
+-- CLIPBOARD CONFIGURATION FOR WSL/Windows/Headless
 -- ═════════════════════════════════════════════════════════════════════
 -- Delete operations use internal nvim clipboard (dd, x)
--- Yank operations use system clipboard (+ register) for Windows access
+-- Yank operations use system clipboard (+ register) when available
+-- Gracefully handles headless contexts (WSL, Docker, RunAI)
 
--- Detect if we're in WSL
+-- Detect environment
 local is_wsl = vim.fn.has("wsl") == 1 or vim.env.WSL_DISTRO_NAME ~= nil
+local has_display = vim.env.DISPLAY ~= nil or vim.env.WAYLAND_DISPLAY ~= nil
+local is_headless = not has_display and not is_wsl
 
 if is_wsl then
   -- WSL clipboard integration via Windows clip.exe
-  -- Allows yanking from nvim in WSL and pasting in Windows apps
+  -- Works even in headless WSL because clip.exe talks to Windows
   vim.g.clipboard = {
     name = "WslClipboard",
     copy = {
@@ -63,8 +66,8 @@ if is_wsl then
     },
     cache_enabled = true,
   }
-else
-  -- Native Linux - try to use xclip or xsel if available
+elseif has_display then
+  -- Native Linux with display - use xclip
   vim.g.clipboard = {
     name = "XClip",
     copy = {
@@ -77,31 +80,44 @@ else
     },
     cache_enabled = true,
   }
+else
+  -- Headless environment (no display) - use internal clipboard only
+  -- No system clipboard provider to avoid errors
+  vim.g.clipboard = nil
+  vim.notify("Running in headless mode - using internal clipboard only", vim.log.levels.INFO)
 end
 
 -- Don't use unnamedplus by default - keeps delete/x operations internal
--- We'll explicitly map yank to use system clipboard
 opt.clipboard = ""
 
 -- ── Keymaps for Clipboard ───────────────────────────────────────────
--- Yank to system clipboard (+ register)
-vim.keymap.set({ "n", "v" }, "y", '"+y', { desc = "Yank to system clipboard" })
-vim.keymap.set("n", "yy", '"+yy', { desc = "Yank line to system clipboard" })
-vim.keymap.set("n", "Y", '"+Y', { desc = "Yank to EOL to system clipboard" })
+-- Only use system clipboard (+ register) if provider is available
+-- Otherwise use internal nvim clipboard
 
--- Visual mode yank also goes to system clipboard
-vim.keymap.set("v", "<leader>y", '"+y', { desc = "Yank selection to system clipboard" })
-
--- Copy entire file to system clipboard
-vim.keymap.set("n", "<leader>ya", 'gg"+yG', { desc = "Yank entire file to system clipboard" })
-
--- Delete/cut to system clipboard (optional - use <leader>d to cut)
-vim.keymap.set({ "n", "v" }, "<leader>d", '"+d', { desc = "Cut to system clipboard" })
-vim.keymap.set("n", "<leader>dd", '"+dd', { desc = "Cut line to system clipboard" })
-
--- Paste from system clipboard
-vim.keymap.set({ "n", "v" }, "<leader>p", '"+p', { desc = "Paste from system clipboard" })
-vim.keymap.set({ "n", "v" }, "<leader>P", '"+P', { desc = "Paste before from system clipboard" })
+if vim.g.clipboard then
+  -- System clipboard available - map yank to use it
+  vim.keymap.set({ "n", "v" }, "y", '"+y', { desc = "Yank to system clipboard" })
+  vim.keymap.set("n", "yy", '"+yy', { desc = "Yank line to system clipboard" })
+  vim.keymap.set("n", "Y", '"+Y', { desc = "Yank to EOL to system clipboard" })
+  
+  -- Visual mode yank also goes to system clipboard
+  vim.keymap.set("v", "<leader>y", '"+y', { desc = "Yank selection to system clipboard" })
+  
+  -- Copy entire file to system clipboard
+  vim.keymap.set("n", "<leader>ya", 'gg"+yG', { desc = "Yank entire file to system clipboard" })
+  
+  -- Delete/cut to system clipboard (optional - use <leader>d to cut)
+  vim.keymap.set({ "n", "v" }, "<leader>d", '"+d', { desc = "Cut to system clipboard" })
+  vim.keymap.set("n", "<leader>dd", '"+dd', { desc = "Cut line to system clipboard" })
+  
+  -- Paste from system clipboard
+  vim.keymap.set({ "n", "v" }, "<leader>p", '"+p', { desc = "Paste from system clipboard" })
+  vim.keymap.set({ "n", "v" }, "<leader>P", '"+P', { desc = "Paste before from system clipboard" })
+else
+  -- No system clipboard - use internal only
+  -- Default vim yank/delete behavior (unnamed register)
+  vim.notify("Clipboard: using internal nvim clipboard (no system integration)", vim.log.levels.INFO)
+end
 
 -- ═════════════════════════════════════════════════════════════════════
 -- AUTOSAVE CONFIGURATION

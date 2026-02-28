@@ -41,18 +41,28 @@ return {
     "mfussenegger/nvim-dap-python",
     ft = "python",
     config = function()
-      -- Find debugpy from Mason installation
-      local mason_registry = require("mason-registry")
+      -- Find debugpy from Mason installation (with error handling)
       local debugpy_path = nil
       
-      if mason_registry.is_installed("debugpy") then
-        local debugpy_pkg = mason_registry.get_package("debugpy")
-        debugpy_path = debugpy_pkg:get_install_path() .. "/venv/bin/python"
+      -- Try Mason registry first (wrapped in pcall for safety)
+      local ok, mason_registry = pcall(require, "mason-registry")
+      if ok and mason_registry then
+        local has_debugpy, _ = pcall(function()
+          if mason_registry.is_installed("debugpy") then
+            local debugpy_pkg = mason_registry.get_package("debugpy")
+            if debugpy_pkg and debugpy_pkg.get_install_path then
+              local path = debugpy_pkg:get_install_path() .. "/venv/bin/python"
+              if vim.fn.executable(path) == 1 then
+                debugpy_path = path
+              end
+            end
+          end
+        end)
       end
       
       -- Fallback to system python if debugpy not found in Mason
-      if not debugpy_path or vim.fn.executable(debugpy_path) ~= 1 then
-        local python_path = vim.fn.exepath("python3") or vim.fn.exepath("python") or "python3"
+      if not debugpy_path then
+        local python_path = vim.fn.exepath("python3") or vim.fn.exepath("python") or "/usr/bin/python3"
         local venv = os.getenv("VIRTUAL_ENV") or os.getenv("CONDA_PREFIX")
         if venv then
           local venv_python = venv .. "/bin/python"
@@ -63,28 +73,34 @@ return {
         debugpy_path = python_path
       end
       
-      require("dap-python").setup(debugpy_path)
+      -- Setup dap-python with found path
+      local dap_python_ok, dap_python = pcall(require, "dap-python")
+      if dap_python_ok then
+        dap_python.setup(debugpy_path)
+      end
 
       -- Add custom launch configurations
-      local dap = require("dap")
-      table.insert(dap.configurations.python, {
-        type = "python",
-        request = "launch",
-        name = "Launch file with arguments",
-        program = "${file}",
-        args = function()
-          local input = vim.fn.input("Arguments: ")
-          return vim.split(input, " ", { trimempty = true })
-        end,
-      })
-      table.insert(dap.configurations.python, {
-        type = "python",
-        request = "launch",
-        name = "Launch module (-m)",
-        module = function()
-          return vim.fn.input("Module name: ")
-        end,
-      })
+      local dap_ok, dap = pcall(require, "dap")
+      if dap_ok and dap.configurations and dap.configurations.python then
+        table.insert(dap.configurations.python, {
+          type = "python",
+          request = "launch",
+          name = "Launch file with arguments",
+          program = "${file}",
+          args = function()
+            local input = vim.fn.input("Arguments: ")
+            return vim.split(input, " ", { trimempty = true })
+          end,
+        })
+        table.insert(dap.configurations.python, {
+          type = "python",
+          request = "launch",
+          name = "Launch module (-m)",
+          module = function()
+            return vim.fn.input("Module name: ")
+          end,
+        })
+      end
     end,
   },
 

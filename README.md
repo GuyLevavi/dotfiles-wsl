@@ -50,6 +50,10 @@ exec zsh
 
 ## Airgap Workflow
 
+Two methods for airgapped deployment:
+
+### Method 1: Docker (Recommended for RunAI/Containers)
+
 ```
 Online PC                    Airgapped Network
 ───────────                  ─────────────────
@@ -57,6 +61,18 @@ Online PC                    Airgapped Network
 2. bash airgap/bundle.sh    4. Build & run Docker image
    → devenv-bundle-*.tar.gz
 ```
+
+### Method 2: WSL (For WSL2-based airgap)
+
+```
+Online PC                    Airgapped Network
+───────────                  ─────────────────
+1. git clone                3. Transfer bundle tarball
+2. bash airgap/bundle.sh    4. bash airgap/deploy.sh bundle.tar.gz
+   → devenv-bundle-*.tar.gz
+```
+
+**Both methods work** - use Docker for container environments (RunAI, Kubernetes), use WSL for WSL2-based development.
 
 **Bundle includes:** 25+ CLI tools, system packages, zsh plugins, nvim plugins, Python wheels.
 
