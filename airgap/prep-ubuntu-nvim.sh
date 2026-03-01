@@ -179,17 +179,20 @@ nvim --headless -c "lua require('lazy').sync({wait=true})" -c "qa" 2>&1 || {
 PLUGIN_COUNT=$(ls "${XDG_DATA_HOME}/nvim/lazy/" 2>/dev/null | wc -l)
 ok "Lazy plugins: $PLUGIN_COUNT"
 
+# Verify mason-tool-installer is installed
+if [[ -d "${XDG_DATA_HOME}/nvim/lazy/mason-tool-installer.nvim" ]]; then
+    ok "mason-tool-installer.nvim installed"
+else
+    warn "mason-tool-installer.nvim NOT found!"
+fi
+
 # Install Mason packages via mason-tool-installer
 log "Installing Mason packages..."
-# Use lua to properly load lazy and then run mason-tool-installer
-nvim --headless \
-    -c "lua require('lazy').sync({wait=true})" \
-    -c "sleep 5" \
-    -c "lua require('mason-tool-installer').install()" \
-    -c "sleep 5" \
-    -c "qa" 2>&1 || {
-    warn "MasonToolsInstallSync had issues"
+# Give lazy time to install all plugins, then run mason-tool-installer
+nvim --headless -c "sleep 10" -c "MasonToolsInstallSync" -c "qa" 2>&1 || {
+    warn "MasonToolsInstallSync had issues, continuing..."
 }
+sleep 3
 MASON_COUNT=$(ls "${XDG_DATA_HOME}/nvim/mason/packages/" 2>/dev/null | wc -l)
 ok "Mason packages: $MASON_COUNT}"
 
