@@ -3,9 +3,8 @@
 # =============================================================================
 
 [user]
-	# TODO: fill in your name and email
-	name =
-	email =
+	name = Guy Levavi
+	email = GuyLevavi@users.noreply.github.com
 
 [core]
 	# Use input to avoid CRLF issues on WSL / cross-platform
