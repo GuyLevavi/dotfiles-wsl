@@ -15,10 +15,11 @@
 --   - Custom debug configurations (launch with args, launch module)
 --   - Neotest pytest args (-v -s)
 --   - Conform ruff formatter setup
---   - basedpyright as primary LSP (pyright as fallback)
-
--- Use basedpyright as primary Python LSP (pyright as fallback)
-vim.g.lazyvim_python_lsp = "basedpyright"
+--   - basedpyright LSP settings + pyright/ruff_lsp removal
+--
+-- NOTE: vim.g.lazyvim_python_lsp = "basedpyright" lives in options.lua,
+-- NOT here. The LazyVim python extra reads it at spec-load time, before
+-- plugin files in lua/plugins/ are evaluated. Setting it here is too late.
 
 return {
   -- ── VS Code-style Debug Keymaps (F-keys) ─────────────────────────
@@ -173,8 +174,13 @@ return {
   -- ── basedpyright: ML-friendly settings ─────────────────────────────
   -- "basic" type checking is less noisy for ML code where libraries
   -- like torch, cv2, numpy often have incomplete type stubs.
-  -- basedpyright is the primary LSP (set above via vim.g.lazyvim_python_lsp)
-  -- pyright is configured as a fallback if basedpyright is not available.
+  -- basedpyright is the primary LSP (set above via vim.g.lazyvim_python_lsp).
+  --
+  -- How basedpyright + ruff divide work (they are designed to coexist):
+  --   basedpyright → go-to-definition, hover docs, type checking, symbols
+  --   ruff          → linting, formatting, organize imports
+  -- LazyVim's lang.python extra disables ruff's hoverProvider so there
+  -- is no conflict — each server owns its domain.
   {
     "neovim/nvim-lspconfig",
     opts = {
@@ -201,35 +207,26 @@ return {
             },
           },
         },
-        pyright = {
-          settings = {
-            python = {
-              analysis = {
-                typeCheckingMode = "basic",
-                autoSearchPaths = true,
-                useLibraryCodeForTypes = true,
-                diagnosticMode = "openFilesOnly",
-                autoImportCompletions = true,
-              },
-            },
-          },
-        },
       },
     },
   },
 
-  -- ── Disable ruff as LSP to avoid completion conflicts ──────────────
-  -- Ruff provides excellent linting but its completion conflicts with
-  -- basedpyright's semantic completion. We keep ruff for linting only.
+  -- ── Remove pyright/ruff_lsp from Mason install list ────────────────
+  -- LazyVim's lang.python extra registers both "pyright" and
+  -- "basedpyright" in opts.servers (with enabled=false on the unused
+  -- one) as a housekeeping step. The side-effect is that LazyVim then
+  -- tells mason-lspconfig to ensure_installed BOTH, so Mason tries to
+  -- install pyright alongside basedpyright. This causes startup errors
+  -- and can result in two LSPs attaching to the same buffer, breaking
+  -- gD, document symbols, and hover.
+  --
+  -- Fix: nil out pyright and ruff_lsp so only basedpyright + ruff are
+  -- installed and enabled.
   {
-    "nvimtools/none-ls.nvim",
-    optional = true,
+    "neovim/nvim-lspconfig",
     opts = function(_, opts)
-      local nls = require("null-ls")
-      opts.sources = vim.tbl_filter(function(source)
-        -- Only use ruff for diagnostics/formatting, not completion
-        return not source.name:match("ruff")
-      end, opts.sources or {})
+      opts.servers["pyright"] = nil
+      opts.servers["ruff_lsp"] = nil
     end,
   },
 }
