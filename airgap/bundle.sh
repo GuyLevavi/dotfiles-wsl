@@ -89,7 +89,7 @@ download "https://github.com/tstack/lnav/releases/download/v${LNAV_VERSION}/lnav
 download "https://github.com/charmbracelet/glow/releases/download/v${GLOW_VERSION}/glow_${GLOW_VERSION}_Linux_x86_64.tar.gz" glow.tar.gz
 
 # Zig C compiler
-download "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" zig.tar.xz
+download "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" zig.tar.xz
 
 # ===== System packages (RPMs or DEBs depending on host distro) =====
 # Download RUNTIME_PKGS so they can be installed offline.
