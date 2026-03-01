@@ -181,10 +181,15 @@ ok "Lazy plugins: $PLUGIN_COUNT"
 
 # Install Mason packages via mason-tool-installer
 log "Installing Mason packages..."
-nvim --headless -c "sleep 3" -c "MasonToolsInstallSync" -c "qa" 2>&1 || {
+# Use lua to properly load lazy and then run mason-tool-installer
+nvim --headless \
+    -c "lua require('lazy').sync({wait=true})" \
+    -c "sleep 5" \
+    -c "lua require('mason-tool-installer').install()" \
+    -c "sleep 5" \
+    -c "qa" 2>&1 || {
     warn "MasonToolsInstallSync had issues"
 }
-sleep 5
 MASON_COUNT=$(ls "${XDG_DATA_HOME}/nvim/mason/packages/" 2>/dev/null | wc -l)
 ok "Mason packages: $MASON_COUNT}"
 
