@@ -172,13 +172,26 @@ fi
 ok "lazy.nvim ready"
 
 # Sync all lazy plugins
-# Use nvim with the user config loaded (via stow), not headless
 log "Syncing lazy plugins (this may take a few minutes)..."
-nvim --headless "+Lazy! sync" +qa 2>&1 || {
+# Wait for plugins to sync and install
+nvim --headless -c "sleep 30" -c "Lazy sync" -c "qa" 2>&1 || {
     warn "Lazy sync had issues, continuing..."
 }
 PLUGIN_COUNT=$(ls "${XDG_DATA_HOME}/nvim/lazy/" 2>/dev/null | wc -l)
 ok "Lazy plugins: $PLUGIN_COUNT"
+
+# Verify mason-tool-installer is installed
+if [[ -d "${XDG_DATA_HOME}/nvim/lazy/mason-tool-installer.nvim" ]]; then
+    ok "mason-tool-installer.nvim installed"
+else
+    warn "mason-tool-installer.nvim NOT found!"
+fi
+
+# Install Mason packages via mason-tool-installer
+log "Installing Mason packages..."
+nvim --headless -c "sleep 10" -c "MasonToolsInstallSync" -c "qa" 2>&1 || {
+    warn "MasonToolsInstallSync had issues, continuing..."
+}
 
 # Verify mason-tool-installer is installed
 if [[ -d "${XDG_DATA_HOME}/nvim/lazy/mason-tool-installer.nvim" ]]; then
