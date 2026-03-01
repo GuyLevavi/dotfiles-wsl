@@ -32,6 +32,14 @@ opt.colorcolumn = "88"
 opt.swapfile = false
 opt.backup = false
 
+-- ── LazyVim Plugin Globals ───────────────────────────────────────────
+-- These MUST live here (not in lua/plugins/*.lua) because LazyVim's
+-- extras read them at spec-load time, before plugin files are evaluated.
+--
+-- Use basedpyright instead of the default pyright for Python LSP.
+-- basedpyright is a stricter, actively maintained fork of pyright.
+vim.g.lazyvim_python_lsp = "basedpyright"
+
 -- ── Disable Unused Providers ────────────────────────────────────────
 -- Silence checkhealth warnings for providers we don't use.
 vim.g.loaded_python3_provider = 0
@@ -54,10 +62,13 @@ local is_wayland = vim.env.WAYLAND_DISPLAY ~= nil
 local has_display = is_x11 or is_wayland
 
 if is_wsl then
-  -- WSL clipboard: prefer win32yank.exe (works with Ghostty), fallback to clip.exe
-  -- win32yank.exe MUST be on Windows filesystem, symlinked from WSL
-  -- Install on Windows: winget install win32yank
-  -- Or symlink from Neovim Windows: ln -s "/mnt/c/Program Files/Neovim/bin/win32yank.exe" ~/.local/bin/win32yank.exe
+  -- WSL clipboard detection order (best → worst):
+  --   1. win32yank.exe  — bidirectional, fast. Needs manual setup:
+  --      ln -s "/mnt/c/Program Files/Neovim/bin/win32yank.exe" ~/.local/bin/win32yank.exe
+  --   2. xclip          — bidirectional via WSLg X11 (DISPLAY=:0 is set in WSLg).
+  --      Install: sudo apt install xclip
+  --   3. full-path clip.exe — copy-only fallback.
+  --      appendWindowsPath=false in /etc/wsl.conf means bare "clip.exe" is NOT in PATH.
   if vim.fn.executable("win32yank.exe") == 1 then
     vim.g.clipboard = {
       name = "win32yank-wsl",
@@ -71,20 +82,40 @@ if is_wsl then
       },
       cache_enabled = 0,  -- CRITICAL: cache_enabled=1 causes ~10 second delays
     }
-  else
-    -- Fallback: clip.exe (works but only copies, can't paste)
+  elseif vim.fn.executable("xclip") == 1 then
+    -- xclip works via WSLg's X11 socket (DISPLAY=:0). Bidirectional.
+    vim.g.clipboard = {
+      name = "xclip",
+      copy = {
+        ["+"] = "xclip -selection clipboard",
+        ["*"] = "xclip -selection primary",
+      },
+      paste = {
+        ["+"] = "xclip -selection clipboard -o",
+        ["*"] = "xclip -selection primary -o",
+      },
+      cache_enabled = 1,
+    }
+  elseif vim.fn.executable("/mnt/c/Windows/System32/clip.exe") == 1 then
+    -- Last resort: full-path clip.exe. Copy-only (paste uses powershell).
+    -- Bare "clip.exe" fails because appendWindowsPath=false in /etc/wsl.conf.
     vim.g.clipboard = {
       name = "WslClipboard",
       copy = {
-        ["+"] = "clip.exe",
-        ["*"] = "clip.exe",
+        ["+"] = "/mnt/c/Windows/System32/clip.exe",
+        ["*"] = "/mnt/c/Windows/System32/clip.exe",
       },
       paste = {
         ["+"] = 'powershell.exe -NoProfile -c "Get-Clipboard | Write-Host -NoNewline"',
         ["*"] = 'powershell.exe -NoProfile -c "Get-Clipboard | Write-Host -NoNewline"',
       },
-      cache_enabled = true,
+      cache_enabled = 0,  -- CRITICAL: cache_enabled=1 causes ~10 second delays
     }
+  else
+    vim.notify(
+      "WSL clipboard: no provider found. Install xclip: sudo apt install xclip",
+      vim.log.levels.WARN
+    )
   end
 elseif is_x11 then
   -- Native Linux with X11 - use xclip

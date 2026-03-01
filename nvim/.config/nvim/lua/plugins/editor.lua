@@ -3,11 +3,40 @@
 -- Customizations on top of LazyVim defaults for Python/CV/ML work.
 
 return {
-  -- ── Telescope: Fuzzy Finder ───────────────────────────────────────
-  -- ESSENTIAL KEYMAPS:
-  --   <leader><space>  Find files     <leader>fg  Live grep
-  --   <leader>fb       Find buffers   <leader>fr  Recent files
-  --   <leader>fs       Find symbols   <leader>/   Grep in buffer
+  -- ── Snacks Picker: Symbol Search ─────────────────────────────────
+  -- LazyVim (install_version >= 8) uses snacks.picker as the default picker.
+  -- Add <leader>sP to search Classes/Functions/Methods in the current file.
+  -- (LazyVim already provides <leader>ss for all symbol kinds via snacks.)
+  --
+  -- basedpyright supports documentSymbol but NOT workspace/symbol,
+  -- so <leader>sS (workspace symbols) will gracefully show nothing.
+  {
+    "folke/snacks.nvim",
+    keys = {
+      {
+        "<leader>sP",
+        function()
+          Snacks.picker.lsp_symbols({
+            -- filter must be keyed by filetype (or "default").
+            -- A flat list { "Class", ... } doesn't work — the picker
+            -- indexes by filetype string, not by integer.
+            filter = { default = { "Class", "Function", "Method" } },
+          })
+        end,
+        desc = "Python symbols (Class/Function/Method)",
+      },
+    },
+  },
+
+  -- ── Telescope: File-ignore Patterns ──────────────────────────────
+  -- telescope.nvim is still installed (used by some plugins) but snacks
+  -- is the active picker. We keep file_ignore_patterns to suppress ML
+  -- noise if telescope is invoked directly.
+  --
+  -- ESSENTIAL KEYMAPS (snacks defaults):
+  --   <leader><space>  Find files     <leader>/   Grep
+  --   <leader>fb       Buffers        <leader>fr  Recent files
+  --   <leader>ss       LSP symbols    <leader>sP  Python symbols (above)
   {
     "nvim-telescope/telescope.nvim",
     opts = {
@@ -46,18 +75,6 @@ return {
         },
       },
     },
-    keys = {
-      -- Use document symbols only (workspace symbols not supported by basedpyright)
-      {
-        "<leader>sP",
-        function()
-          require("telescope.builtin").lsp_document_symbols({
-            symbols = { "Class", "Function", "Method" },
-          })
-        end,
-        desc = "Search Python symbols in current file",
-      },
-    },
   },
 
   -- ── Which-Key: Custom Group Labels ────────────────────────────────
@@ -84,3 +101,4 @@ return {
     },
   },
 }
+

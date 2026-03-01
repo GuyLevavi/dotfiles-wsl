@@ -7,28 +7,16 @@ AI agents: read this before starting work. If you fix something here, mark it do
 
 ## 🔴 Open Bugs
 
-### B1 — Clipboard not working in Ghostty (WSL)
-**Status**: Open  
-**Symptom**: Yanking in nvim from Ghostty terminal does not update Windows clipboard.  
-**Root cause**: Current config uses `clip.exe` but Ghostty may need `win32yank.exe` for proper integration. `win32yank.exe` must live on the Windows filesystem (not copied into WSL rootfs) — symlink it from `/mnt/c/...`.  
-**Fix needed**:
-1. Install `win32yank` on Windows side: `winget install win32yank` (or via Neovim Windows install at `C:\Program Files\Neovim\bin\win32yank.exe`)
-2. Symlink into WSL: `ln -s "/mnt/c/Program Files/Neovim/bin/win32yank.exe" ~/.local/bin/win32yank.exe`
-3. Add to `bundle.sh` to include the symlink creation step
-4. Update `options.lua` to prefer win32yank when available:
-```lua
-if vim.fn.executable('win32yank.exe') == 1 then
-  vim.g.clipboard = {
-    name = 'win32yank-wsl',
-    copy = { ['+'] = 'win32yank.exe -i --crlf', ['*'] = 'win32yank.exe -i --crlf' },
-    paste = { ['+'] = 'win32yank.exe -o --lf', ['*'] = 'win32yank.exe -o --lf' },
-    cache_enabled = 0,
-  }
-end
-```
-**Note**: `cache_enabled = 0` is important — `cache_enabled = 1` causes 10-second delays.  
-**Files**: `nvim/.config/nvim/lua/config/options.lua`, `bootstrap/03-install-tools.sh`  
-**Ref**: https://tpwo.github.io/blog/2024/09/17/clipboard-sync-between-wsl-neovim-and-windows/
+### B1 — Clipboard not working in WSL (Debian, appendWindowsPath=false)
+**Status**: ✅ Fixed (online branch, 2026-03-01) — pending `sudo apt install xclip` by user  
+**Root cause**: `/etc/wsl.conf` has `appendWindowsPath=false`, so bare `clip.exe` is not in `$PATH`.
+The old config used `"clip.exe"` without a full path, causing "not executable" errors.  
+**Fix applied** (`options.lua`): WSL detection now uses three-tier fallback:
+1. `win32yank.exe` (bidirectional, fastest) — symlink from Windows FS
+2. `xclip` via WSLg X11 (`DISPLAY=:0`) — **install: `sudo apt install xclip`**
+3. `/mnt/c/Windows/System32/clip.exe` full path — copy-only fallback, no bare name
+**User action needed**: `sudo apt install xclip` — once done, clipboard is fully bidirectional.  
+**Files**: `nvim/.config/nvim/lua/config/options.lua`
 
 ---
 
@@ -69,21 +57,23 @@ end
 ---
 
 ### B5 — Mason packages causing startup errors (dangling packages)
-**Status**: Open  
-**Symptom**: Error messages at startup and on file change from dangling Mason packages.  
-**Fix needed**: Remove all 4 rogue Mason packages. Keep ONLY: `basedpyright`, `ruff`, `debugpy`.  
-Remove: `pyright` (duplicate), `docker-compose`, `lua_ls`, `marksman` (or keep lua_ls/marksman if desired — user said skip them all for now).  
-**Files**: `nvim/.config/nvim/lua/plugins/python.lua`, any file that references Mason ensure_installed  
-**Action**: Search entire `nvim/` for `ensure_installed` and audit every entry.
+**Status**: ✅ Fixed (online branch, 2026-03-01)
+**Root cause**: LazyVim's `lang.python` extra registers both `pyright` and `basedpyright`
+in `opts.servers`, causing Mason to attempt installing pyright alongside basedpyright.
+**Fix**: Nil out `opts.servers["pyright"]` and `opts.servers["ruff_lsp"]` in a second
+`nvim-lspconfig` opts block in `python.lua`. Only basedpyright + ruff are installed.
+**Files**: `nvim/.config/nvim/lua/plugins/python.lua`
+**Note**: The 3-package rule in GOTCHAS.md was airgap-only. Online branch safely uses 11 packages.
 
 ---
 
-### B6 — Telescope workspace symbols fail without network / "not supported by any server"
-**Status**: Partially fixed (document symbols work), workspace symbols still broken  
-**Symptom**: `<leader>sW` (workspace symbols) fails even with `--network none`.  
-**Root cause**: basedpyright doesn't fully implement `workspace/symbol` in all contexts.  
-**Current state**: `<leader>sP` uses `lsp_document_symbols` (reliable). `<leader>sW` has error handler.  
-**Remaining**: Verify the fallback message is clear and non-disruptive.
+### B6 — Telescope workspace symbols fail / "not supported by any server"
+**Status**: ✅ Fixed (online branch, 2026-03-01)
+**Root cause**: Same as B5 — pyright attaching alongside basedpyright caused `gD` and
+`<leader>sP` (document symbols) to fail. Also, `<leader>sW` was calling
+`lsp_dynamic_workspace_symbols` which basedpyright doesn't support.
+**Fix**: B5 fix removes the duplicate server. `<leader>sW` keymap was already removed;
+`<leader>sP` uses `lsp_document_symbols` (basedpyright supports this).
 
 ---
 

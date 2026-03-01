@@ -66,30 +66,38 @@ The clipboard provider varies by runtime context — `options.lua` auto-detects:
 
 | Context | Detection | Provider |
 |---------|-----------|----------|
-| WSL (Ghostty/WezTerm) | `WSL_DISTRO_NAME` set | **win32yank.exe** (preferred) → fallback `clip.exe` |
-| Docker / Linux desktop | `/.dockerenv` exists or `$DISPLAY` set | OSC52 terminal escape sequences |
-| Headless (no DISPLAY, not WSL) | Fallback | Internal nvim clipboard only; shows notification |
+| WSL | `WSL_DISTRO_NAME` set | win32yank.exe → xclip → full-path clip.exe (priority order) |
+| Linux desktop (X11) | `$DISPLAY` set, not WSL | xclip |
+| Linux desktop (Wayland) | `$WAYLAND_DISPLAY` set | wl-copy / wl-paste |
+| Docker / headless | fallback | OSC52 terminal escape sequences |
 
-### WSL Clipboard — win32yank (Critical)
+### WSL Clipboard — Priority Order
 
-`clip.exe` **only copies, it cannot paste**. `win32yank.exe` handles both directions and is faster.
+`/etc/wsl.conf` has `appendWindowsPath=false`, so Windows executables like `clip.exe`
+are **not in `$PATH`** (bare `clip.exe` fails). The full path must be used.
 
-**Critical**: `win32yank.exe` MUST live on the Windows filesystem, NOT copied into the WSL rootfs. Use a symlink:
+`options.lua` detection order for WSL:
 
-```bash
-# Option A: if Neovim is installed on Windows (recommended)
-ln -s "/mnt/c/Program Files/Neovim/bin/win32yank.exe" ~/.local/bin/win32yank.exe
+1. **`win32yank.exe`** (best — bidirectional, fast). Needs manual setup:
+   ```bash
+   ln -s "/mnt/c/Program Files/Neovim/bin/win32yank.exe" ~/.local/bin/win32yank.exe
+   # or: winget install win32yank  (run in Windows PowerShell)
+   ```
+   `win32yank.exe` MUST live on the Windows filesystem, NOT copied into the WSL rootfs.
 
-# Option B: install standalone (run in Windows PowerShell/CMD):
-winget install win32yank
-# Then find installation path and symlink it
-```
+2. **`xclip`** (good — bidirectional via WSLg X11). WSLg sets `DISPLAY=:0` so xclip
+   works out of the box once installed. This is the **current active provider** on
+   the Debian WSL setup after running:
+   ```bash
+   sudo apt install xclip
+   ```
 
-`options.lua` priority for WSL:
-1. `win32yank.exe` if `vim.fn.executable('win32yank.exe') == 1`
-2. `clip.exe` / `powershell.exe` as fallback
+3. **`/mnt/c/Windows/System32/clip.exe`** (last resort — copy-only, paste uses
+   `powershell.exe`). Full path required because `appendWindowsPath=false`.
 
-**`cache_enabled = 0` required** — `cache_enabled = 1` causes ~10 second hang on every yank.
+4. **`vim.notify` warning** if no provider found.
+
+**`cache_enabled = 0` required for win32yank and clip.exe** — `cache_enabled = 1` causes ~10 second hang on every yank.
 
 ### Linux Desktop / Docker Clipboard
 
@@ -104,16 +112,48 @@ If OSC52 isn't working inside `docker exec`, try running the container with `-e 
 
 ---
 
-## Mason Packages — Only These 3 Are Valid
+## Mason Packages — Safe List
 
-Only these Mason packages should be in `ensure_installed`. **Any others cause startup errors.**
+### Airgap branch (`main`)
+
+Only these 3 packages are safe. Others cause dangling-package errors because Mason
+can't download them at runtime:
 
 ```lua
 ensure_installed = { "basedpyright", "ruff", "debugpy" }
 ```
 
-Removed (caused dangling errors): `pyright`, `docker-compose`, `lua_ls`, `marksman`.
-If `lua_ls` or `marksman` are needed later, add them back deliberately with full config.
+### Online branch
+
+The full 11-package list in `mason-tools.lua` is safe. Mason downloads any missing
+packages on first startup.
+
+---
+
+## basedpyright + pyright Conflict
+
+**Symptom**: Mason startup error trying to install `pyright`. `gD` and `<leader>sP`
+(document symbols) fail with "textDocument method not supported".
+
+**Root cause**: LazyVim's `lang.python` extra registers both `"pyright"` and
+`"basedpyright"` in `opts.servers` (with `enabled=false` on the inactive one) as a
+housekeeping step. The side-effect is that LazyVim's LSP init tells mason-lspconfig
+to `ensure_installed` both. Two LSPs attach to the same buffer and the wrong one
+answers `gD`/symbol requests.
+
+**Fix** (already applied in `python.lua`):
+```lua
+{
+  "neovim/nvim-lspconfig",
+  opts = function(_, opts)
+    opts.servers["pyright"] = nil    -- remove so Mason never installs it
+    opts.servers["ruff_lsp"] = nil   -- old ruff LSP name, superseded by "ruff"
+  end,
+},
+```
+
+**Note**: `automatic_installation` was removed in mason-lspconfig v2 (May 2025).
+LazyVim handles `automatic_enable` correctly — no override needed.
 
 ---
 

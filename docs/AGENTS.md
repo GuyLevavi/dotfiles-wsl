@@ -143,7 +143,7 @@ fastfetch.tar.gz, mc
 ### Key Behaviors (current)
 
 - **Clipboard**: Yank (`y`) → system clipboard. Delete (`dd`, `x`) → internal nvim register.
-  - WSL: `clip.exe`
+  - WSL: `xclip` via WSLg X11 (install: `sudo apt install xclip`) → falls back to full-path `/mnt/c/Windows/System32/clip.exe` (bare `clip.exe` fails: `appendWindowsPath=false` in `/etc/wsl.conf`)
   - Docker on Linux: OSC52 terminal escape sequences
   - Headless (no DISPLAY, not WSL): internal only, shows notification
 - **Autosave**: on `InsertLeave` + `TextChanged`. Autoformat is OFF (`vim.g.autoformat = false`). Manual format: `<leader>cf`.
