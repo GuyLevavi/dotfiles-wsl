@@ -172,8 +172,12 @@ fi
 ok "lazy.nvim ready"
 
 # Sync all lazy plugins
+# Need to add lazy.nvim to runtimepath first before requiring it
 log "Syncing lazy plugins (this may take a few minutes)..."
-nvim --headless -c "lua require('lazy').sync({wait=true})" -c "qa" 2>&1 || {
+nvim --headless \
+    -c "set runtimepath+=${XDG_DATA_HOME}/nvim/lazy/lazy.nvim" \
+    -c "lua require('lazy').sync({wait=true})" \
+    -c "qa" 2>&1 || {
     warn "Lazy sync had issues, continuing..."
 }
 PLUGIN_COUNT=$(ls "${XDG_DATA_HOME}/nvim/lazy/" 2>/dev/null | wc -l)
@@ -188,8 +192,12 @@ fi
 
 # Install Mason packages via mason-tool-installer
 log "Installing Mason packages..."
-# Give lazy time to install all plugins, then run mason-tool-installer
-nvim --headless -c "sleep 10" -c "MasonToolsInstallSync" -c "qa" 2>&1 || {
+# Need to add lazy to runtimepath again for subsequent calls
+nvim --headless \
+    -c "set runtimepath+=${XDG_DATA_HOME}/nvim/lazy/lazy.nvim" \
+    -c "sleep 10" \
+    -c "MasonToolsInstallSync" \
+    -c "qa" 2>&1 || {
     warn "MasonToolsInstallSync had issues, continuing..."
 }
 sleep 3
