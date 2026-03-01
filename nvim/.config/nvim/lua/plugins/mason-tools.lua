@@ -1,36 +1,13 @@
--- mason-tools.lua - Pre-install Mason packages for airgap
--- =========================================================
--- All tools needed for the development environment.
+-- mason-tools.lua - Mason package management
+-- =============================================
+-- Defines the canonical list of LSP servers, formatters, linters, and
+-- debuggers to install via mason-tool-installer.
 --
--- IMPORTANT: This file MUST load AFTER LazyVim extras to override
--- their automatic_installation = true settings. We explicitly
--- control ALL package installations via mason-tool-installer.
+-- automatic_installation = true means packages in ensure_installed are
+-- installed automatically on startup if not already present.
 
 return {
-  -- First: Override mason-lspconfig to disable ALL auto-installation
-  -- This must come AFTER the extras to take effect
-  {
-    "mason-org/mason-lspconfig.nvim",
-    opts = function(_, opts)
-      -- Completely disable automatic installation
-      -- This overrides any settings from LazyVim extras
-      opts.automatic_installation = false
-      -- Also ensure we don't auto-install any servers
-      opts.ensure_installed = opts.ensure_installed or {}
-    end,
-  },
-
-  -- Second: Override mason-nvim-dap to disable auto-install
-  {
-    "jay-babu/mason-nvim-dap.nvim",
-    opts = function(_, opts)
-      opts.automatic_installation = false
-      opts.ensure_installed = opts.ensure_installed or {}
-    end,
-  },
-
-  -- Third: mason-tool-installer for our explicit list
-  -- This is the ONLY thing that should install packages
+  -- mason-tool-installer: installs all packages in ensure_installed on startup
   {
     "WhoIsSethDaniel/mason-tool-installer.nvim",
     dependencies = { "mason.nvim" },
@@ -53,8 +30,8 @@ return {
         "hadolint",
         "tree-sitter-cli",
       },
-      -- Disable automatic installation - we only install what's in ensure_installed
-      automatic_installation = false,
+      -- Auto-install any missing packages from ensure_installed on startup
+      automatic_installation = true,
     },
   },
 }

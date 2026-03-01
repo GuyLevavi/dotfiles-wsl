@@ -8,12 +8,9 @@ return {
   {
     "nvim-treesitter/nvim-treesitter",
     opts = {
-      -- CRITICAL FOR AIRGAP: Disable auto-install to prevent network access
-      -- All parsers are pre-compiled in ~/.local/share/nvim/site/parser/
-      auto_install = false,
-      -- Ignore install for any parsers not in ensure_installed list
-      -- This prevents treesitter from trying to download parsers on filetype detection
-      ignore_install = { "gitcommit" },
+      -- Auto-install parsers for any filetype that lacks one
+      auto_install = true,
+      ignore_install = {},
       ensure_installed = {
         -- Primary
         "python",
@@ -23,7 +20,6 @@ return {
         "dockerfile",
         -- Data formats
         "json",
-        "jsonc",
         "yaml",
         "toml",
         -- Documentation
@@ -34,8 +30,7 @@ return {
         "vimdoc",
         -- Utility
         "regex",
-        -- Removed gitcommit from auto-install - causes issues in airgap
-        -- "gitcommit",
+        "gitcommit",
         "gitignore",
         "git_rebase",
         "diff",

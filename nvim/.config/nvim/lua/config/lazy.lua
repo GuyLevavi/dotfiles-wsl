@@ -97,10 +97,9 @@ require("lazy").setup({
   },
 
   -- Check for plugin updates automatically (shows a notification)
-  -- DISABLED for airgap/offline environments - prevents network access
   checker = {
-    enabled = false,
-    notify = false,
+    enabled = true,
+    notify = true,
   },
 
   -- Don't notify on config file changes (less noise)

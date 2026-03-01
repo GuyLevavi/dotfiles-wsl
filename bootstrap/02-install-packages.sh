@@ -141,7 +141,7 @@ elif [[ "$PKG_MGR" == "apt" ]]; then
         zsh tmux stow git git-lfs gawk
         nodejs npm
         podman buildah skopeo fuse-overlayfs
-        python3-dev python3-pip
+        python3-dev python3-pip python3-venv
         jq shellcheck
     )
 

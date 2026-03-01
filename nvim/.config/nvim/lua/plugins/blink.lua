@@ -6,17 +6,10 @@
 --
 -- Common issue: "bad LLM completions" = buffer completions showing
 -- random words from the current file mixed with proper LSP suggestions.
---
--- AIRGAP NOTE: This plugin is pinned to prevent network access on toggle.
--- Use `pin = true` to prevent Lazy from checking for updates.
 
 return {
   {
     "saghen/blink.cmp",
-    -- PINNED for airgap: prevents Lazy from checking GitHub for updates
-    pin = true,
-    -- Explicitly set directory to ensure offline availability
-    dir = vim.fn.stdpath("data") .. "/lazy/blink.cmp",
     opts = {
       -- ── Completion Sources ────────────────────────────────────────────
       -- Order matters: first match wins

@@ -79,8 +79,6 @@ resolve_versions() {
     BTOP_VERSION="${BTOP_VERSION:-$(gh_latest aristocratos/btop 1.4.0)}"
     LNAV_VERSION="${LNAV_VERSION:-$(gh_latest tstack/lnav 0.12.0)}"
     GLOW_VERSION="${GLOW_VERSION:-$(gh_latest charmbracelet/glow 2.0.0)}"
-    # Zig C compiler — with fallback version
-    ZIG_VERSION="${ZIG_VERSION:-$(gh_latest ziglang/zig 0.15.1)}"
 }
 
 # Python versions to install via uv (3.10 and 3.11)
@@ -148,7 +146,7 @@ gh_tool() {
 # ===== Print resolved versions =====
 echo ""
 echo "Versions:"
-for v in STARSHIP ZOXIDE FZF BAT EZA RIPGREP FD YAZI LAZYGIT DELTA NEOVIM UV GLAB JFROG_CLI HELM OC FASTFETCH MC K9S LAZYDOCKER BTOP LNAV GLOW ZIG; do
+for v in STARSHIP ZOXIDE FZF BAT EZA RIPGREP FD YAZI LAZYGIT DELTA NEOVIM UV GLAB JFROG_CLI HELM OC FASTFETCH MC K9S LAZYDOCKER BTOP LNAV GLOW; do
     var="${v}_VERSION"
     printf "  %-14s %s\n" "$v" "${!var}"
 done
@@ -185,12 +183,6 @@ echo "==> glow ${GLOW_VERSION}"
 fetch "${TMP}/glow.tar.gz" "https://github.com/charmbracelet/glow/releases/download/v${GLOW_VERSION}/glow_${GLOW_VERSION}_Linux_x86_64.tar.gz"
 mkdir -p "${TMP}/glow" && tar -xzf "${TMP}/glow.tar.gz" -C "${TMP}/glow" --strip-components=1
 install -m 0755 "${TMP}/glow/glow" "${BIN}/glow"
-
-# ===== zig cc — Standalone C compiler =====
-echo "==> zig ${ZIG_VERSION}"
-fetch "${TMP}/zig.tar.gz" "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz"
-mkdir -p "${TMP}/zig" && tar -xf "${TMP}/zig.tar.gz" -C "${TMP}/zig" --strip-components=1
-install -m 0755 "${TMP}/zig/zig" "${BIN}/zig"
 
 # uv — fast Python package manager (must be installed before uv tool installs below)
 echo "==> uv ${UV_VERSION}"
