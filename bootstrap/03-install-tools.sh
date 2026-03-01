@@ -54,24 +54,24 @@ gl_latest() {
 # versions.lock, and the lock file pins them for offline deploy.
 resolve_versions() {
     echo "==> Resolving latest versions..."
-    STARSHIP_VERSION="${STARSHIP_VERSION:-$(gh_latest starship/starship)}"
-    ZOXIDE_VERSION="${ZOXIDE_VERSION:-$(gh_latest ajeetdsouza/zoxide)}"
-    FZF_VERSION="${FZF_VERSION:-$(gh_latest junegunn/fzf)}"
-    BAT_VERSION="${BAT_VERSION:-$(gh_latest sharkdp/bat)}"
-    EZA_VERSION="${EZA_VERSION:-$(gh_latest eza-community/eza)}"
-    RIPGREP_VERSION="${RIPGREP_VERSION:-$(gh_latest BurntSushi/ripgrep)}"
-    FD_VERSION="${FD_VERSION:-$(gh_latest sharkdp/fd)}"
-    YAZI_VERSION="${YAZI_VERSION:-$(gh_latest sxyazi/yazi)}"
-    LAZYGIT_VERSION="${LAZYGIT_VERSION:-$(gh_latest jesseduffield/lazygit)}"
-    DELTA_VERSION="${DELTA_VERSION:-$(gh_latest dandavison/delta)}"
-    NEOVIM_VERSION="${NEOVIM_VERSION:-$(gh_latest neovim/neovim)}"
-    UV_VERSION="${UV_VERSION:-$(gh_latest astral-sh/uv)}"
-    GLAB_VERSION="${GLAB_VERSION:-$(gl_latest gitlab-org/cli)}"
+    STARSHIP_VERSION="${STARSHIP_VERSION:-$(gh_latest starship/starship 1.24.2)}"
+    ZOXIDE_VERSION="${ZOXIDE_VERSION:-$(gh_latest ajeetdsouza/zoxide 0.9.9)}"
+    FZF_VERSION="${FZF_VERSION:-$(gh_latest junegunn/fzf 0.68.0)}"
+    BAT_VERSION="${BAT_VERSION:-$(gh_latest sharkdp/bat 0.26.1)}"
+    EZA_VERSION="${EZA_VERSION:-$(gh_latest eza-community/eza 0.23.4)}"
+    RIPGREP_VERSION="${RIPGREP_VERSION:-$(gh_latest BurntSushi/ripgrep 15.1.0)}"
+    FD_VERSION="${FD_VERSION:-$(gh_latest sharkdp/fd 10.3.0)}"
+    YAZI_VERSION="${YAZI_VERSION:-$(gh_latest sxyazi/yazi 26.1.22)}"
+    LAZYGIT_VERSION="${LAZYGIT_VERSION:-$(gh_latest jesseduffield/lazygit 0.59.0)}"
+    DELTA_VERSION="${DELTA_VERSION:-$(gh_latest dandavison/delta 0.18.2)}"
+    NEOVIM_VERSION="${NEOVIM_VERSION:-$(gh_latest neovim/neovim 0.11.6)}"
+    UV_VERSION="${UV_VERSION:-$(gh_latest astral-sh/uv 0.10.7)}"
+    GLAB_VERSION="${GLAB_VERSION:-$(gl_latest gitlab-org/cli 1.86.0)}"
     JFROG_CLI_VERSION="${JFROG_CLI_VERSION:-2.72.2}"  # no GitHub releases page
-    HELM_VERSION="${HELM_VERSION:-$(gh_latest helm/helm)}"
+    HELM_VERSION="${HELM_VERSION:-$(gh_latest helm/helm 4.1.1)}"
     OC_VERSION="${OC_VERSION:-4.17}"                  # uses stable-X.Y channel, not a tag
-    FASTFETCH_VERSION="${FASTFETCH_VERSION:-$(gh_latest fastfetch-cli/fastfetch)}"
-    MC_VERSION="${MC_VERSION:-$(gh_latest minio/mc)}"  # date-based: RELEASE.YYYY-MM-DDT...
+    FASTFETCH_VERSION="${FASTFETCH_VERSION:-$(gh_latest fastfetch-cli/fastfetch 2.59.0)}"
+    MC_VERSION="${MC_VERSION:-$(gh_latest minio/mc RELEASE.2025-08-13T08-35-41Z)}"  # date-based: RELEASE.YYYY-MM-DDT...
     MARIMO_VERSION="${MARIMO_VERSION:-}"               # empty = latest via uv
     # New TUI tools — with fallback versions for CI/API rate limits
     K9S_VERSION="${K9S_VERSION:-$(gh_latest derailed/k9s 0.40.5)}"
@@ -80,7 +80,7 @@ resolve_versions() {
     LNAV_VERSION="${LNAV_VERSION:-$(gh_latest tstack/lnav 0.12.0)}"
     GLOW_VERSION="${GLOW_VERSION:-$(gh_latest charmbracelet/glow 2.0.0)}"
     # Zig C compiler — with fallback version
-    ZIG_VERSION="${ZIG_VERSION:-$(gh_latest ziglang/zig 0.13.0)}"
+    ZIG_VERSION="${ZIG_VERSION:-$(gh_latest ziglang/zig 0.15.1)}"
 }
 
 # Python versions to install via uv (3.10 and 3.11)
@@ -170,27 +170,34 @@ install -m 0755 "${TMP}/lazydocker/lazydocker" "${BIN}/lazydocker"
 
 # btop — Resource monitor
 echo "==> btop ${BTOP_VERSION}"
-fetch "${TMP}/btop.tar.gz" "https://github.com/aristocratos/btop/releases/download/v${BTOP_VERSION}/btop-x86_64-linux.tbz"
+fetch "${TMP}/btop.tar.gz" "https://github.com/aristocratos/btop/releases/download/v${BTOP_VERSION}/btop-x86_64-unknown-linux-musl.tbz"
 mkdir -p "${TMP}/btop" && tar -xjf "${TMP}/btop.tar.gz" -C "${TMP}/btop"
-install -m 0755 "${TMP}/btop/btop/btop" "${BIN}/btop"
+install -m 0755 "${TMP}/btop/btop/bin/btop" "${BIN}/btop"
 
 # lnav — Log navigator
 echo "==> lnav ${LNAV_VERSION}"
-fetch "${TMP}/lnav.zip" "https://github.com/tstack/lnav/releases/download/v${LNAV_VERSION}/lnav-${LNAV_VERSION}-x86_64-linux-musl.zip"
+fetch "${TMP}/lnav.zip" "https://github.com/tstack/lnav/releases/download/v${LNAV_VERSION}/lnav-${LNAV_VERSION}-linux-musl-x86_64.zip"
 unzip -qo "${TMP}/lnav.zip" -d "${TMP}/lnav"
 install -m 0755 "${TMP}/lnav/lnav-${LNAV_VERSION}/lnav" "${BIN}/lnav"
 
 # glow — Markdown renderer
 echo "==> glow ${GLOW_VERSION}"
 fetch "${TMP}/glow.tar.gz" "https://github.com/charmbracelet/glow/releases/download/v${GLOW_VERSION}/glow_${GLOW_VERSION}_Linux_x86_64.tar.gz"
-mkdir -p "${TMP}/glow" && tar -xzf "${TMP}/glow.tar.gz" -C "${TMP}/glow"
+mkdir -p "${TMP}/glow" && tar -xzf "${TMP}/glow.tar.gz" -C "${TMP}/glow" --strip-components=1
 install -m 0755 "${TMP}/glow/glow" "${BIN}/glow"
 
 # ===== zig cc — Standalone C compiler =====
 echo "==> zig ${ZIG_VERSION}"
-fetch "${TMP}/zig.tar.gz" "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz"
+fetch "${TMP}/zig.tar.gz" "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz"
 mkdir -p "${TMP}/zig" && tar -xf "${TMP}/zig.tar.gz" -C "${TMP}/zig" --strip-components=1
 install -m 0755 "${TMP}/zig/zig" "${BIN}/zig"
+
+# uv — fast Python package manager (must be installed before uv tool installs below)
+echo "==> uv ${UV_VERSION}"
+fetch "${TMP}/uv.tar.gz" "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz"
+mkdir -p "${TMP}/uv" && tar -xzf "${TMP}/uv.tar.gz" -C "${TMP}/uv" --strip-components=1
+install -m 0755 "${TMP}/uv/uv" "${BIN}/uv"
+install -m 0755 "${TMP}/uv/uvx" "${BIN}/uvx"
 
 # ===== Python tools (uv-based) =====
 
@@ -225,13 +232,16 @@ fi
 echo "==> jupyter and jupytext (uv tool install)"
 if $OFFLINE; then
     if [[ -d "${CACHE}/wheels" ]]; then
-        uv tool install --find-links "${CACHE}/wheels" jupyter jupytext 2>/dev/null || \
-            echo "   Skipped (wheels present but install failed)"
+        uv tool install --find-links "${CACHE}/wheels" jupyterlab 2>/dev/null || \
+            echo "   Skipped jupyter (wheels present but install failed)"
+        uv tool install --find-links "${CACHE}/wheels" jupytext 2>/dev/null || \
+            echo "   Skipped jupytext (wheels present but install failed)"
     else
         echo "   Skipped (no wheels in cache)"
     fi
 else
-    uv tool install jupyter jupytext
+    uv tool install jupyterlab
+    uv tool install jupytext
 fi
 
 # ===== Install tools =====
@@ -327,13 +337,6 @@ install -m 0755 "${TMP}/fastfetch" "${BIN}/fastfetch"
 echo "==> mc ${MC_VERSION}"
 fetch "${TMP}/mc" "https://dl.min.io/client/mc/release/linux-amd64/archive/mc.${MC_VERSION}"
 install -m 0755 "${TMP}/mc" "${BIN}/mc"
-
-# uv — fast Python package manager
-echo "==> uv ${UV_VERSION}"
-fetch "${TMP}/uv.tar.gz" "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz"
-mkdir -p "${TMP}/uv" && tar -xzf "${TMP}/uv.tar.gz" -C "${TMP}/uv" --strip-components=1
-install -m 0755 "${TMP}/uv/uv" "${BIN}/uv"
-install -m 0755 "${TMP}/uv/uvx" "${BIN}/uvx"
 
 # Python versions via uv (3.9 through 3.13)
 echo "==> Python ${PYTHON_VERSIONS} (via uv)"
